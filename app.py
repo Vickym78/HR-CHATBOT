@@ -2,7 +2,7 @@
 
 import os
 import json
-import re # <-- Added for parsing queries
+import re
 import time
 from typing import List, Dict, Optional, Set
 
@@ -19,15 +19,20 @@ st.set_page_config(page_title="Talent Finder AI", page_icon="✨", layout="wide"
 # Custom CSS for a sleek, modern, and animated interface
 st.markdown("""
 <style>
-    /* (CSS remains the same as before) */
+    /* General Styles */
     .stApp { background-color: #0d1117; }
+    /* Keyframe Animations */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.7); } 70% { transform: scale(1.02); box-shadow: 0 0 10px 15px rgba(0, 184, 255, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0); } }
+    /* Title Animation */
     .title-text { font-size: 3rem; font-weight: 700; text-align: center; margin-bottom: 1rem; background: -webkit-linear-gradient(45deg, #00FFA3, #00B8FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: fadeIn 1s ease-out forwards; }
+    /* Animated "Thinking" Loader */
     .loader-container { text-align: center; padding: 20px; font-size: 1.1rem; color: #8b949e; animation: fadeIn 0.5s ease-out forwards; }
     .loader-container .robot-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; animation: pulse 2s infinite; }
+    /* Example Prompt Buttons */
     .stButton>button { border: 1px solid #2d333b; border-radius: 8px; background-color: #161b22; color: #c9d1d9; transition: all 0.3s ease; animation: fadeIn 0.5s ease-out forwards; }
     .stButton>button:hover { border-color: #00B8FF; color: #00B8FF; transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0, 184, 255, 0.2); }
+    /* Employee Card Styling with Animation */
     .employee-card { border: 1px solid #2d333b; border-radius: 12px; padding: 20px; background-color: #161b22; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: transform 0.3s ease, box-shadow 0.3s ease; animation: fadeIn 0.5s ease-out forwards; height: 100%; }
     .employee-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0, 184, 255, 0.25); border-color: #00B8FF; }
     .employee-card h3 { color: #00B8FF; margin-top: 0; }
@@ -80,7 +85,6 @@ class RAGSystem:
         self.documents = self._create_documents()
         self.index = self._create_faiss_index()
         self.llm_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
-        # Create a set of all unique skills for efficient parsing
         self.all_skills = {skill.lower() for emp in self.employees for skill in emp['skills']}
 
     def _create_documents(self) -> List[str]:
@@ -93,49 +97,32 @@ class RAGSystem:
         index.add_with_ids(embeddings, ids)
         return index
 
-    # --- HYBRID SEARCH UPDATE ---
     def _parse_and_get_filtered_ids(self, query: str) -> Set[int]:
-        """Parses the query for hard filters (skills, experience) and returns a set of matching employee IDs."""
         query_lower = query.lower()
-        filtered_ids = set(self.employee_map.keys()) # Start with all employees
-
-        # Filter by Experience
+        filtered_ids = set(self.employee_map.keys())
         exp_match = re.search(r'(\d+)\+?\s*years', query_lower)
         if exp_match:
             min_exp = int(exp_match.group(1))
             filtered_ids.intersection_update({emp['id'] for emp in self.employees if emp['experience_years'] >= min_exp})
-
-        # Filter by Skills
         required_skills = {skill for skill in self.all_skills if skill in query_lower}
         if required_skills:
             filtered_ids.intersection_update({
                 emp['id'] for emp in self.employees 
                 if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)
             })
-        
         return filtered_ids
 
     def search(self, query: str, top_k: int = 3) -> tuple[List[Employee], np.ndarray]:
-        """Performs a hybrid search: metadata pre-filtering followed by semantic ranking."""
-        
-        # 1. Get IDs from metadata pre-filtering
         pre_filtered_ids = self._parse_and_get_filtered_ids(query)
-
-        # 2. Get top candidates from a broader semantic search
         query_embedding = self.embedding_model.encode([query])
-        distances, semantic_ids_list = self.index.search(query_embedding, k=10) # Search a larger pool
-
+        distances, semantic_ids_list = self.index.search(query_embedding, k=10)
         final_candidates = []
-        
-        # 3. Prioritize candidates that match BOTH metadata and semantic search
-        if pre_filtered_ids != set(self.employee_map.keys()): # Check if any filters were applied
+        if pre_filtered_ids != set(self.employee_map.keys()):
              for eid in semantic_ids_list[0]:
                 if eid in pre_filtered_ids:
                     final_candidates.append(Employee(**self.employee_map[eid]))
                 if len(final_candidates) >= top_k:
                     break
-
-        # 4. Fallback: If intersection is too small, fill with top semantic results
         if len(final_candidates) < top_k:
             existing_ids = {c.id for c in final_candidates}
             for eid in semantic_ids_list[0]:
@@ -143,11 +130,8 @@ class RAGSystem:
                     final_candidates.append(Employee(**self.employee_map[eid]))
                 if len(final_candidates) >= top_k:
                     break
-
-        # Create dummy scores as ranking is now hybrid
         dummy_scores = np.array([[0.0] * len(final_candidates)])
         return final_candidates, dummy_scores
-    # --- END OF HYBRID SEARCH UPDATE ---
 
     def _call_llm(self, user_prompt: str, system_prompt: str) -> str:
         try:
@@ -175,17 +159,34 @@ def load_rag_system():
         st.error(f"Initialization failed: {e}")
         return None
 
-# --- 4. UI Helper Functions & 5. Main Application ---
-# (The rest of the file remains the same as the previous version)
-
+# --- 4. UI Helper Functions ---
 def stream_response(text):
     for word in text.split():
         yield word + " "
         time.sleep(0.02)
 
+# --- FIX IS HERE ---
+# The full, correct HTML content is now inside this function.
 def display_employee_card(card_data: dict, container):
+    """Renders a single employee card with full details inside a given container."""
     with container:
-        st.markdown(f"""<div class="employee-card">...</div>""", unsafe_allow_html=True) # Collapsed for brevity
+        st.markdown(
+            f"""
+            <div class="employee-card">
+                <h3><span class="icon">👤</span>{card_data['name']}</h3>
+                <p><span class="icon">📅</span><b>Experience:</b> {card_data['experience_years']} years</p>
+                <p><span class="icon">📌</span><b>Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']}</p>
+                <details>
+                    <summary><b>View Details</b></summary>
+                    <p><span class="icon">🛠️</span><b>Skills:</b> {', '.join(card_data['skills'])}</p>
+                    <p><span class="icon">🚀</span><b>Projects:</b></p>
+                    <ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul>
+                </details>
+                {f"<p><span class='icon'>📝</span><b>Notes:</b> {card_data['notes']}</p>" if card_data.get('notes') else ""}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 def show_thinking_animation():
     thinking_steps = ["🔍 Parsing query...", "⚙️ Applying filters...", "🧠 Analyzing candidates..."]
@@ -198,6 +199,7 @@ def show_thinking_animation():
 def handle_prompt_click(prompt_text):
     st.session_state.clicked_prompt = prompt_text
 
+# --- 5. Main Application ---
 with st.sidebar:
     st.header("About")
     st.markdown("This AI chatbot uses a hybrid search system to find the right talent.")
