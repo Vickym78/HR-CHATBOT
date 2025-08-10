@@ -287,7 +287,7 @@ if rag_system:
         st.info("Ask me anything about our talent pool!")
         st.markdown("<div style='text-align: center; margin-bottom: 10px; animation: fadeIn 1s ease-out forwards;'>Or try one of these:</div>", unsafe_allow_html=True)
         cols = st.columns([1, 1, 1])
-        prompts = ["Find Python ML experts", "Who knows React & AWS?", "Suggest a DevOps engineer"]
+        prompts = ["Find Python developers with 3+ years experience", "Find developers who know both AWS and Docker", "Suggest people for a React Native project"]
         if cols[0].button(prompts[0], use_container_width=True, on_click=handle_prompt_click, args=[prompts[0]]): pass
         if cols[1].button(prompts[1], use_container_width=True, on_click=handle_prompt_click, args=[prompts[1]]): pass
         if cols[2].button(prompts[2], use_container_width=True, on_click=handle_prompt_click, args=[prompts[2]]): pass
