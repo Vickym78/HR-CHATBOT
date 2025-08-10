@@ -102,8 +102,6 @@ st.markdown("""
 
 
 # --- 2. Data and Models ---
-
-# Full 15-person employee dataset
 EMPLOYEE_DATA = {
   "employees": [
     { "id": 1, "name": "Alice Johnson", "skills": ["Python", "React", "AWS", "Node.js"], "experience_years": 5, "projects": ["E-commerce Platform Migration", "Healthcare Dashboard UI"], "availability": "available" },
@@ -123,7 +121,6 @@ EMPLOYEE_DATA = {
     { "id": 15, "name": "Olivia Garcia", "skills": ["Java", "Android", "Kotlin", "Jetpack Compose"], "experience_years": 4, "projects": ["Android App for a restaurant chain", "Fitness Tracking Mobile App"], "availability": "available" }
   ]
 }
-
 
 class Employee(BaseModel):
     id: int
@@ -171,10 +168,34 @@ class RAGSystem:
             st.error(f"LLM API Error: {e}")
             return "I'm sorry, I encountered an error while generating a response."
 
+    # --- PROMPT ENGINEERING UPDATE ---
     def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
+        """Generates a detailed, persuasive HR response using an improved prompt."""
+        
+        system_prompt = """
+        You are an expert HR Talent Acquisition Partner. Your goal is to provide a detailed, persuasive, and personalized recommendation based on the user's request and the provided candidate data.
+
+        Follow these rules strictly:
+        1.  **Acknowledge the Query:** Start with a brief introductory sentence that acknowledges the user's request.
+        2.  **Detailed Candidate Analysis:**
+            - Present each candidate in a separate, well-defined section using their name as a sub-header.
+            - For each candidate, **do not just list their skills or projects.** You MUST synthesize this information.
+            - **Crucially, explain *why* they are a perfect fit by explicitly connecting their specific skills and past project experience to the keywords and intent of the user's query.** For example, if the query is about "healthcare ML," highlight their project named "Medical Diagnosis Platform" and explain its relevance.
+        3.  **Persuasive Tone:** Use confident and professional language to build trust in your recommendations.
+        4.  **Proactive Closing:** Conclude your entire response with a helpful, proactive statement, suggesting next steps (e.g., "Would you like me to provide more details about their specific projects?" or "I can check their calendars for a meeting.").
+        5.  **Formatting:** Use Markdown extensively (bolding, italics, lists) to make the response highly readable and professional.
+        """
+
         context_str = "\n---\n".join([json.dumps(emp.model_dump()) for emp in context_employees])
-        user_prompt = f"Based on the user query '{query}' and these employee profiles:\n{context_str}\n...generate a helpful summary recommendation. Do not repeat all the details from the profiles, just provide a concise summary of why they are a good fit."
-        system_prompt = "You are an intelligent HR assistant. Format your responses using Markdown. Use lists, bolding, and italics to make the information clear and readable."
+        user_prompt = f"""
+        User Query: "{query}"
+
+        Retrieved Candidate Profiles:
+        {context_str}
+
+        Based on the provided user query and candidate profiles, please generate your expert recommendation following all the rules I've given you.
+        """
+        
         return self._call_llm(user_prompt, system_prompt)
 
     def generate_general_response(self, query: str) -> str:
@@ -234,8 +255,6 @@ def handle_prompt_click(prompt_text):
 
 
 # --- 5. Main Application ---
-
-# --- Sidebar ---
 with st.sidebar:
     st.header("About")
     st.markdown("This AI-powered chatbot helps HR teams find the right talent by answering natural language queries.")
@@ -245,7 +264,6 @@ with st.sidebar:
         st.session_state.clicked_prompt = None
         st.rerun()
 
-# --- Main Page ---
 st.markdown('<h1 class="title-text">Talent Finder AI ✨</h1>', unsafe_allow_html=True)
 rag_system = load_rag_system()
 
@@ -255,7 +273,6 @@ if rag_system:
     if "clicked_prompt" not in st.session_state:
         st.session_state.clicked_prompt = None
 
-    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -266,7 +283,6 @@ if rag_system:
                     for i, card in enumerate(message["cards"]):
                         display_employee_card(card, cols[i])
 
-    # Show welcome screen and example prompts if chat is empty
     if not st.session_state.messages:
         st.info("Ask me anything about our talent pool!")
         st.markdown("<div style='text-align: center; margin-bottom: 10px; animation: fadeIn 1s ease-out forwards;'>Or try one of these:</div>", unsafe_allow_html=True)
@@ -276,18 +292,15 @@ if rag_system:
         if cols[1].button(prompts[1], use_container_width=True, on_click=handle_prompt_click, args=[prompts[1]]): pass
         if cols[2].button(prompts[2], use_container_width=True, on_click=handle_prompt_click, args=[prompts[2]]): pass
 
-    # This is the full, corrected input handling logic
     prompt = st.chat_input("e.g., 'Find developers with machine learning skills'") or st.session_state.clicked_prompt
     
     if prompt:
-        st.session_state.clicked_prompt = None # Reset button-click state
+        st.session_state.clicked_prompt = None
         st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # Display the user's message immediately
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Show thinking animation and process the request
         with st.chat_message("assistant"):
             show_thinking_animation()
             
@@ -301,10 +314,8 @@ if rag_system:
                 answer = rag_system.generate_general_response(prompt)
                 cards_to_show = []
 
-            # Stream the text response
             st.write_stream(stream_response(answer))
 
-            # Display cards in an expander
             if cards_to_show:
                 with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
                     num_cards = len(cards_to_show)
@@ -312,10 +323,7 @@ if rag_system:
                     for i, card in enumerate(cards_to_show):
                         display_employee_card(card, cols[i])
             
-            # Save the full assistant response to history
             st.session_state.messages.append({"role": "assistant", "content": answer, "cards": cards_to_show})
-            
-            # Rerun to clear the input box and finalize the display
             st.rerun()
 
 else:
