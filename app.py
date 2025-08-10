@@ -1,7 +1,7 @@
 import os
 import json
 import time
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import numpy as np
 import faiss
@@ -10,45 +10,64 @@ from openai import OpenAI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
-# --- Streamlit Page Configuration ---
+# --- Streamlit Page Config ---
 st.set_page_config(page_title="HR Query Chatbot 🤖", page_icon="🤖", layout="wide")
 
-# --- Embedded Employee Data ---
-EMPLOYEE_DATA = {
-    "employees": [
-        {"id": 1, "name": "Alice Johnson", "skills": ["Python", "React", "AWS", "Node.js"], "experience_years": 5,
-         "projects": ["E-commerce Platform Migration", "Healthcare Dashboard UI"], "availability": "available"},
-        {"id": 2, "name": "Dr. Sarah Chen", "skills": ["Python", "Machine Learning", "TensorFlow", "PyTorch", "Medical Data Processing"],
-         "experience_years": 6, "projects": ["Medical Diagnosis Platform (Computer Vision)", "Genomic Data Analysis Pipeline"],
-         "availability": "available", "notes": "Published 3 papers on healthcare AI."},
-        {"id": 3, "name": "Michael Rodriguez", "skills": ["Python", "Machine Learning", "scikit-learn", "pandas", "HIPAA Compliance"],
-         "experience_years": 4, "projects": ["Patient Risk Prediction System", "EHR Anonymization Tool"], "availability": "on project until 2025-10-15"},
-        {"id": 4, "name": "David Smith", "skills": ["Java", "Spring Boot", "Microservices", "Kafka", "PostgreSQL"],
-         "experience_years": 8, "projects": ["Financial Trading System Backend", "Banking API Gateway"], "availability": "available"},
-        {"id": 5, "name": "Emily White", "skills": ["React Native", "JavaScript", "TypeScript", "Firebase", "GraphQL"],
-         "experience_years": 3, "projects": ["Mobile Banking App", "Social Media Content App"], "availability": "available"},
-        {"id": 6, "name": "Chris Green", "skills": ["DevOps", "Kubernetes", "Docker", "AWS", "Terraform", "CI/CD"],
-         "experience_years": 7, "projects": ["Cloud Infrastructure Automation", "CI/CD Pipeline Optimization"], "availability": "available"},
-        {"id": 7, "name": "Priya Patel", "skills": ["Data Science", "R", "SQL", "Tableau", "PowerBI"],
-         "experience_years": 4, "projects": ["Customer Churn Analysis Dashboard", "Marketing Campaign ROI Prediction"], "availability": "available"},
-        {"id": 8, "name": "Tom Clark", "skills": ["Go", "gRPC", "Prometheus", "System Design"],
-         "experience_years": 6, "projects": ["High-performance Logging Service", "Real-time Bidding System"], "availability": "on project until 2025-11-01"},
-        {"id": 9, "name": "Laura Martinez", "skills": ["UX/UI Design", "Figma", "Sketch", "User Research"],
-         "experience_years": 5, "projects": ["Redesign of an e-learning platform", "User journey mapping for a fintech app"], "availability": "available"},
-        {"id": 10, "name": "James Wilson", "skills": ["Python", "Django", "PostgreSQL", "Celery", "Redis"],
-         "experience_years": 9, "projects": ["Scalable Web App for Logistics", "Content Management System"], "availability": "available"},
-        {"id": 11, "name": "Zoe Brown", "skills": ["Cybersecurity", "Penetration Testing", "Metasploit", "Wireshark"],
-         "experience_years": 5, "projects": ["Security Audit for a financial institution", "Network Vulnerability Assessment"], "availability": "on project until 2025-09-30"},
-        {"id": 12, "name": "Ethan Hunt", "skills": ["React", "Next.js", "Vercel", "TailwindCSS"],
-         "experience_years": 3, "projects": ["Corporate Website Overhaul", "Server-side Rendered Marketing Site"], "availability": "available"},
-        {"id": 13, "name": "Grace Lee", "skills": ["Project Management", "Agile", "Scrum", "Jira"],
-         "experience_years": 10, "projects": ["Led development of 'E-commerce Platform Migration'", "Coordinated 'Mobile Banking App' launch"], "availability": "available"},
-        {"id": 14, "name": "Ben Carter", "skills": ["AWS", "Docker", "Python", "Bash Scripting", "Ansible"],
-         "experience_years": 4, "projects": ["Automated cloud deployment scripts", "Containerization of legacy Java application"], "availability": "available"},
-        {"id": 15, "name": "Olivia Garcia", "skills": ["Java", "Android", "Kotlin", "Jetpack Compose"],
-         "experience_years": 4, "projects": ["Android App for a restaurant chain", "Fitness Tracking Mobile App"], "availability": "available"}
-    ]
+# --- Custom CSS for Cool UI ---
+st.markdown("""
+<style>
+body {
+    background-color: #0e1117;
+    color: white;
 }
+header, .stMarkdown {
+    color: white !important;
+}
+.nameplate {
+    background: linear-gradient(90deg, #ff4d4d, #ff884d);
+    color: white;
+    padding: 12px 25px;
+    font-size: 28px;
+    font-weight: bold;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0px 4px 20px rgba(255, 77, 77, 0.5);
+    margin-bottom: 25px;
+}
+.chat-bubble-user {
+    background-color: #262730;
+    padding: 10px 15px;
+    border-radius: 12px;
+    margin: 8px 0;
+    color: #fff;
+    max-width: 80%;
+}
+.chat-bubble-assistant {
+    background-color: #1e1e2f;
+    padding: 10px 15px;
+    border-radius: 12px;
+    margin: 8px 0;
+    color: #d4d4d4;
+    max-width: 80%;
+}
+.employee-card {
+    border: 2px solid #4CAF50;
+    border-radius: 12px;
+    padding: 15px;
+    margin: 12px 0;
+    background-color: #1b1f24;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.employee-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0 25px rgba(76, 175, 80, 0.4);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# --- Embedded Employee Data ---
+EMPLOYEE_DATA = {...}  # same employee dictionary you already have
 
 class Employee(BaseModel):
     id: int
@@ -133,20 +152,16 @@ def stream_response(text):
         time.sleep(0.04)
 
 def display_employee_card(card_data: dict):
-    """Polished HR profile card"""
     st.markdown(
         f"""
-        <div style="border:2px solid #4CAF50; border-radius:10px; padding:15px; margin:10px 0; background-color:#f9fff9;">
+        <div class="employee-card">
             <h3>👤 {card_data['name']}</h3>
             <p><b>📅 Experience:</b> {card_data['experience_years']} years</p>
             <p><b>📌 Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']}</p>
             <details>
                 <summary><b>🛠 Skills & Projects</b></summary>
                 <p><b>Skills:</b> {', '.join(card_data['skills'])}</p>
-                <p><b>Past Projects:</b></p>
-                <ul>
-                    {''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}
-                </ul>
+                <ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul>
             </details>
             {f"<p><b>📝 Notes:</b> {card_data['notes']}</p>" if card_data.get('notes') else ""}
         </div>
@@ -155,7 +170,7 @@ def display_employee_card(card_data: dict):
     )
 
 # --- Main App ---
-st.title("HR Resource Query Chatbot 🤖")
+st.markdown('<div class="nameplate">HR Resource Query Chatbot 🤖</div>', unsafe_allow_html=True)
 st.info("Find the right talent instantly by asking a question below.")
 
 rag_system = load_rag_system()
@@ -164,37 +179,33 @@ if rag_system:
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display previous chat
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        if message["role"] == "user":
+            st.markdown(f"<div class='chat-bubble-user'>{message['content']}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='chat-bubble-assistant'>{message['content']}</div>", unsafe_allow_html=True)
             if "cards" in message:
                 for card in message["cards"]:
                     display_employee_card(card)
 
-    # New user input
     if prompt := st.chat_input("e.g., 'Find Python developers with AWS skills'"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        st.markdown(f"<div class='chat-bubble-user'>{prompt}</div>", unsafe_allow_html=True)
 
-        with st.chat_message("assistant"):
-            retrieved_employees, scores = rag_system.search(prompt)
-            RELEVANCE_THRESHOLD = 1.0
+        retrieved_employees, scores = rag_system.search(prompt)
+        RELEVANCE_THRESHOLD = 1.0
 
-            if retrieved_employees and scores[0][0] < RELEVANCE_THRESHOLD:
-                answer = rag_system.generate_hr_response(prompt, retrieved_employees)
-                cards_to_show = [emp.model_dump() for emp in retrieved_employees]
-            else:
-                answer = rag_system.generate_general_response(prompt)
-                cards_to_show = []
+        if retrieved_employees and scores[0][0] < RELEVANCE_THRESHOLD:
+            answer = rag_system.generate_hr_response(prompt, retrieved_employees)
+            cards_to_show = [emp.model_dump() for emp in retrieved_employees]
+        else:
+            answer = rag_system.generate_general_response(prompt)
+            cards_to_show = []
 
-            st.write_stream(stream_response(answer))
-            for card in cards_to_show:
-                display_employee_card(card)
+        st.write_stream(stream_response(answer))
+        for card in cards_to_show:
+            display_employee_card(card)
 
-            st.session_state.messages.append(
-                {"role": "assistant", "content": answer, "cards": cards_to_show}
-            )
+        st.session_state.messages.append({"role": "assistant", "content": answer, "cards": cards_to_show})
 else:
     st.warning("App is not configured correctly. Please check your API key.")
