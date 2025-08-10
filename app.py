@@ -296,7 +296,7 @@ if rag_system:
 
         with st.chat_message("assistant"):
             # --- IDENTITY & DEVELOPER CHECKS ---
-            developer_keywords = ["who made you", "your developer", "created you", "invented you", "creator", "vicky"]
+            developer_keywords = ["who made you", "your developer", "created you", "invented you", "creator", "who developes you", "Who is your developer","vicky"]
             identity_keywords = ["who are you", "what are you"]
             prompt_lower = prompt.lower()
 
