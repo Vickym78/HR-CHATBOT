@@ -168,10 +168,7 @@ class RAGSystem:
             st.error(f"LLM API Error: {e}")
             return "I'm sorry, I encountered an error while generating a response."
 
-    # --- PROMPT ENGINEERING UPDATE ---
     def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
-        """Generates a detailed, persuasive HR response using an improved prompt."""
-        
         system_prompt = """
         You are an expert HR Talent Acquisition Partner. Your goal is to provide a detailed, persuasive, and personalized recommendation based on the user's request and the provided candidate data.
 
@@ -185,7 +182,6 @@ class RAGSystem:
         4.  **Proactive Closing:** Conclude your entire response with a helpful, proactive statement, suggesting next steps (e.g., "Would you like me to provide more details about their specific projects?" or "I can check their calendars for a meeting.").
         5.  **Formatting:** Use Markdown extensively (bolding, italics, lists) to make the response highly readable and professional.
         """
-
         context_str = "\n---\n".join([json.dumps(emp.model_dump()) for emp in context_employees])
         user_prompt = f"""
         User Query: "{query}"
@@ -195,7 +191,6 @@ class RAGSystem:
 
         Based on the provided user query and candidate profiles, please generate your expert recommendation following all the rules I've given you.
         """
-        
         return self._call_llm(user_prompt, system_prompt)
 
     def generate_general_response(self, query: str) -> str:
@@ -209,7 +204,6 @@ def load_rag_system():
     except Exception as e:
         st.error(f"Initialization failed: {e}")
         return None
-
 
 # --- 4. UI Helper Functions ---
 def stream_response(text):
@@ -253,7 +247,6 @@ def show_thinking_animation():
 def handle_prompt_click(prompt_text):
     st.session_state.clicked_prompt = prompt_text
 
-
 # --- 5. Main Application ---
 with st.sidebar:
     st.header("About")
@@ -286,8 +279,8 @@ if rag_system:
     if not st.session_state.messages:
         st.info("Ask me anything about our talent pool!")
         st.markdown("<div style='text-align: center; margin-bottom: 10px; animation: fadeIn 1s ease-out forwards;'>Or try one of these:</div>", unsafe_allow_html=True)
-        cols = st.columns([1, 1, 1])
-        prompts = ["Find Python developers with 3+ years experience", "Find developers who know both AWS and Docker", "Suggest people for a React Native project"]
+        cols = st.columns(3)
+        prompts = ["Find Python ML experts", "Who are you?", "Who is your developer?"]
         if cols[0].button(prompts[0], use_container_width=True, on_click=handle_prompt_click, args=[prompts[0]]): pass
         if cols[1].button(prompts[1], use_container_width=True, on_click=handle_prompt_click, args=[prompts[1]]): pass
         if cols[2].button(prompts[2], use_container_width=True, on_click=handle_prompt_click, args=[prompts[2]]): pass
@@ -302,27 +295,44 @@ if rag_system:
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            show_thinking_animation()
-            
-            retrieved_employees, scores = rag_system.search(prompt)
-            RELEVANCE_THRESHOLD = 1.0
+            # --- IDENTITY & DEVELOPER CHECKS ---
+            developer_keywords = ["who made you", "your developer", "created you", "invented you", "creator", "vicky"]
+            identity_keywords = ["who are you", "what are you"]
+            prompt_lower = prompt.lower()
 
-            if retrieved_employees and scores[0][0] < RELEVANCE_THRESHOLD:
-                answer = rag_system.generate_hr_response(prompt, retrieved_employees)
-                cards_to_show = [emp.model_dump() for emp in retrieved_employees]
+            answer = ""
+            cards_to_show = []
+
+            if any(keyword in prompt_lower for keyword in developer_keywords):
+                answer = "I was created by **Vicky Mahato**. He's a talented developer who built me to help HR teams find the best talent efficiently! 🚀"
+                st.write_stream(stream_response(answer))
+
+            elif any(keyword in prompt_lower for keyword in identity_keywords):
+                answer = "I am an intelligent **HR Assistant Chatbot** 🤖, designed to help you find the best talent in our company. Ask me about our employees' skills or project experience!"
+                st.write_stream(stream_response(answer))
+            
             else:
-                answer = rag_system.generate_general_response(prompt)
-                cards_to_show = []
+                # --- Original RAG Logic ---
+                show_thinking_animation()
+                retrieved_employees, scores = rag_system.search(prompt)
+                RELEVANCE_THRESHOLD = 1.0
 
-            st.write_stream(stream_response(answer))
+                if retrieved_employees and scores[0][0] < RELEVANCE_THRESHOLD:
+                    answer = rag_system.generate_hr_response(prompt, retrieved_employees)
+                    cards_to_show = [emp.model_dump() for emp in retrieved_employees]
+                else:
+                    answer = rag_system.generate_general_response(prompt)
+                    cards_to_show = []
 
-            if cards_to_show:
-                with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
-                    num_cards = len(cards_to_show)
-                    cols = st.columns(num_cards if num_cards > 0 else 1)
-                    for i, card in enumerate(cards_to_show):
-                        display_employee_card(card, cols[i])
+                st.write_stream(stream_response(answer))
+                if cards_to_show:
+                    with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
+                        num_cards = len(cards_to_show)
+                        cols = st.columns(num_cards if num_cards > 0 else 1)
+                        for i, card in enumerate(cards_to_show):
+                            display_employee_card(card, cols[i])
             
+            # --- Save to history and rerun ---
             st.session_state.messages.append({"role": "assistant", "content": answer, "cards": cards_to_show})
             st.rerun()
 
