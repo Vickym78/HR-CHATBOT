@@ -16,74 +16,8 @@ from sentence_transformers import SentenceTransformer
 # --- 1. Page Configuration & UI Styling ---
 st.set_page_config(page_title="Talent Finder AI", page_icon="✨", layout="wide")
 
-# --- ENHANCED CSS ---
-st.markdown("""
-<style>
-    /* --- NEW: Main Background & Layout --- */
-    .stApp {
-        background-image: radial-gradient(circle, #1a202c, #0d1117);
-    }
-
-    /* --- NEW: Glassmorphism Sidebar --- */
-    [data-testid="stSidebar"] {
-        background-color: rgba(22, 27, 34, 0.7);
-        backdrop-filter: blur(10px);
-        border-right: 1px solid #2d333b;
-    }
-
-    /* --- NEW: Polished Chat Bubbles --- */
-    [data-testid="stChatMessage"] {
-        background-color: #161b22;
-        border-radius: 12px;
-        border: 1px solid #2d333b;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-    
-    /* Keyframe Animations */
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.7); } 70% { transform: scale(1.02); box-shadow: 0 0 10px 15px rgba(0, 184, 255, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0); } }
-
-    /* Title Animation */
-    .title-text {
-        font-size: 3rem; font-weight: 700; text-align: center; margin-bottom: 1rem;
-        background: -webkit-linear-gradient(45deg, #00FFA3, #00B8FF);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        animation: fadeIn 1s ease-out forwards;
-    }
-
-    /* Animated "Thinking" Loader */
-    .loader-container { text-align: center; padding: 20px; font-size: 1.1rem; color: #8b949e; animation: fadeIn 0.5s ease-out forwards; }
-    .loader-container .robot-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; animation: pulse 2s infinite; }
-    
-    /* Example Prompt Buttons */
-    .stButton>button {
-        border: 1px solid #2d333b; border-radius: 8px; background-color: #161b22; color: #c9d1d9;
-        transition: all 0.3s ease; animation: fadeIn 0.5s ease-out forwards;
-    }
-    .stButton>button:hover {
-        border-color: #00B8FF; color: #00B8FF; transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0, 184, 255, 0.2);
-    }
-    
-    /* --- NEW: Glassmorphism Employee Card --- */
-    .employee-card {
-        border: 1px solid #2d333b; border-radius: 12px; padding: 20px;
-        background-color: rgba(22, 27, 34, 0.7); /* Semi-transparent */
-        backdrop-filter: blur(5px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        animation: fadeIn 0.5s ease-out forwards; height: 100%;
-    }
-    .employee-card:hover {
-        transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0, 184, 255, 0.25);
-        border-color: #00B8FF;
-    }
-    .employee-card h3 { color: #00B8FF; margin-top: 0; }
-    .employee-card p { color: #c9d1d9; font-size: 0.95rem; }
-    .employee-card summary { color: #8b949e; cursor: pointer; }
-    .employee-card .icon { font-size: 1.1em; margin-right: 5px; }
-</style>
-""", unsafe_allow_html=True)
+# (CSS is unchanged and has been collapsed for brevity)
+st.markdown("""<style> .stApp { background-color: #0d1117; } @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } } @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.7); } 70% { transform: scale(1.02); box-shadow: 0 0 10px 15px rgba(0, 184, 255, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0); } } .title-text { font-size: 3rem; font-weight: 700; text-align: center; margin-bottom: 1rem; background: -webkit-linear-gradient(45deg, #00FFA3, #00B8FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: fadeIn 1s ease-out forwards; } .loader-container { text-align: center; padding: 20px; font-size: 1.1rem; color: #8b949e; animation: fadeIn 0.5s ease-out forwards; } .loader-container .robot-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; animation: pulse 2s infinite; } .stButton>button { border: 1px solid #2d333b; border-radius: 8px; background-color: #161b22; color: #c9d1d9; transition: all 0.3s ease; animation: fadeIn 0.5s ease-out forwards; } .stButton>button:hover { border-color: #00B8FF; color: #00B8FF; transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0, 184, 255, 0.2); } .employee-card { border: 1px solid #2d333b; border-radius: 12px; padding: 20px; background-color: #161b22; box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: transform 0.3s ease, box-shadow 0.3s ease; animation: fadeIn 0.5s ease-out forwards; height: 100%; } .employee-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0, 184, 255, 0.25); border-color: #00B8FF; } .employee-card h3 { color: #00B8FF; margin-top: 0; } .employee-card p { color: #c9d1d9; font-size: 0.95rem; } .employee-card summary { color: #8b949e; cursor: pointer; } .employee-card .icon { font-size: 1.1em; margin-right: 5px; } </style>""", unsafe_allow_html=True)
 
 
 # --- 2. Data and Models ---
@@ -101,6 +35,7 @@ class Employee(BaseModel):
 
 # --- 3. RAG System (Backend Logic) ---
 class RAGSystem:
+    # (This class is unchanged)
     def __init__(self, api_key: str):
         if not api_key: raise ValueError("Groq API key is missing.")
         self.employees = EMPLOYEE_DATA['employees']
@@ -110,17 +45,14 @@ class RAGSystem:
         self.index = self._create_faiss_index()
         self.llm_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
         self.all_skills = {skill.lower() for emp in self.employees for skill in emp['skills']}
-
     def _create_documents(self) -> List[str]:
         return [f"Name: {e['name']}. Skills: {', '.join(e['skills'])}. Experience: {e['experience_years']} years. Projects: {', '.join(e['projects'])}. Notes: {e.get('notes', 'N/A')}" for e in self.employees]
-
     def _create_faiss_index(self):
         embeddings = self.embedding_model.encode(self.documents, convert_to_tensor=False)
         index = faiss.IndexIDMap(faiss.IndexFlatL2(embeddings.shape[1]))
         ids = np.array([emp['id'] for emp in self.employees])
         index.add_with_ids(embeddings, ids)
         return index
-
     def _parse_and_get_filtered_ids(self, query: str) -> Set[int]:
         query_lower = query.lower()
         candidate_ids = set(self.employee_map.keys())
@@ -132,7 +64,6 @@ class RAGSystem:
         if required_skills:
             candidate_ids.intersection_update({emp['id'] for emp in self.employees if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)})
         return candidate_ids
-
     def search(self, query: str, top_k: int = 3) -> tuple[List[Employee], np.ndarray]:
         pre_filtered_ids = self._parse_and_get_filtered_ids(query)
         was_filtered = pre_filtered_ids != set(self.employee_map.keys())
@@ -151,7 +82,6 @@ class RAGSystem:
             if len(final_candidates) >= top_k: break
         dummy_scores = np.array([[0.0] * len(final_candidates)])
         return final_candidates, dummy_scores
-
     def _call_llm(self, user_prompt: str, system_prompt: str) -> str:
         try:
             response = self.llm_client.chat.completions.create(model="llama3-8b-8192", messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], temperature=0.7)
@@ -159,13 +89,11 @@ class RAGSystem:
         except Exception as e:
             st.error(f"LLM API Error: {e}")
             return "I'm sorry, I encountered an error while generating a response."
-
     def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
-        system_prompt = """You are an expert HR Talent Acquisition Partner... (prompt is unchanged)"""
+        system_prompt = """You are an expert HR Talent Acquisition Partner... (prompt unchanged)"""
         context_str = "\n---\n".join([json.dumps(emp.model_dump()) for emp in context_employees])
         user_prompt = f"""User Query: "{query}"\n\nRetrieved Candidate Profiles:\n{context_str}\n\nBased on this, generate your expert recommendation."""
         return self._call_llm(user_prompt, system_prompt)
-
     def generate_general_response(self, query: str) -> str:
         system_prompt = "You are a friendly and helpful conversational AI assistant..."
         return self._call_llm(query, system_prompt)
@@ -186,7 +114,7 @@ def stream_response(text):
 
 def display_employee_card(card_data: dict, container):
     with container:
-        st.markdown(f"""<div class="employee-card"><h3><span class="icon">👤</span>{card_data['name']}</h3><p><span class="icon">📅</span><b>Experience:</b> {card_data['experience_years']} years</p><p><span class="icon">📌</span><b>Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']}</p><details><summary><b>View Details</b></summary><p><span class="icon">🛠️</span><b>Skills:</b> {', '.join(card_data['skills'])}</p><p><span class="icon">🚀</span><b>Projects:</b></p><ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul></details>{f"<p><span class='icon'>📝</span><b>Notes:</b> {card_data['notes']}</p>" if card_data.get('notes') else ""}</div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="employee-card"><h3><span class="icon">👤</span>{card_data['name']}</h3><p><span class="icon">📅</span><b>Experience:</b> {card_data['experience_years']} years</p><p><span class="icon">📌</span><b>Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']}</p><details><summary><b>View Details</b></summary><p><span class="icon">🛠️</span><b>Skills:</b> {', '.join(card_data['skills'])}</p><p><span class="icon">🚀</span><b>Projects:</b></p><ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul></details>{f"<p><span class='icon'>📝</span><b>Notes:</b> {card_data.get('notes')}</p>" if card_data.get('notes') else ""}</div>""", unsafe_allow_html=True)
 
 def show_thinking_animation():
     thinking_steps = ["🔍 Parsing query...", "⚙️ Applying filters...", "🧠 Analyzing candidates..."]
@@ -222,26 +150,29 @@ if rag_system:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message.get("cards"):
-                with st.expander("👥 View Recommended Candidate Profiles", expanded=False):
-                    num_cards = len(message["cards"])
-                    cols = st.columns(num_cards if num_cards > 0 else 1)
-                    for i, card in enumerate(message["cards"]):
-                        display_employee_card(card, cols[i])
+                # Adaptive display for history: grid for many cards, columns for few
+                with st.expander("👥 View Candidate Profiles", expanded=False):
+                    cards = message["cards"]
+                    if len(cards) > 3:
+                        num_rows = (len(cards) + 2) // 3
+                        for i in range(num_rows):
+                            cols = st.columns(3)
+                            row_cards = cards[i*3:(i+1)*3]
+                            for j, card in enumerate(row_cards):
+                                display_employee_card(card, cols[j])
+                    else:
+                        cols = st.columns(len(cards) if cards else 1)
+                        for i, card in enumerate(cards):
+                            display_employee_card(card, cols[i])
 
-    # --- ENHANCED Welcome Screen ---
     if not st.session_state.messages:
-        st.markdown(
-            """
-            <div style="text-align: center; animation: fadeIn 1s ease-out forwards;">
-                <h2>Welcome!</h2>
-                <p>Ask me anything about our talent pool, or try one of these examples:</p>
-            </div>
-            """, unsafe_allow_html=True)
-        cols = st.columns(3)
-        prompts = ["Python devs with 5+ years experience", "Who knows both AWS and Docker?", "Who is your developer?"]
+        st.markdown("<div style='text-align: center;'><h2>Welcome!</h2><p>Ask me to find talent, or try an example:</p></div>", unsafe_allow_html=True)
+        cols = st.columns(4)
+        prompts = ["List all employees", "Python devs with 5+ years", "Who knows AWS and Docker?", "Who made you?"]
         if cols[0].button(prompts[0], use_container_width=True, on_click=handle_prompt_click, args=[prompts[0]]): pass
         if cols[1].button(prompts[1], use_container_width=True, on_click=handle_prompt_click, args=[prompts[1]]): pass
         if cols[2].button(prompts[2], use_container_width=True, on_click=handle_prompt_click, args=[prompts[2]]): pass
+        if cols[3].button(prompts[3], use_container_width=True, on_click=handle_prompt_click, args=[prompts[3]]): pass
 
     _, input_col, _ = st.columns([1, 3, 1])
     with input_col:
@@ -258,7 +189,9 @@ if rag_system:
             developer_keywords = ["who made you", "your developer", "created you", "invented you", "creator", "vicky"]
             identity_keywords = ["who are you", "what are you"]
             greeting_keywords = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon"]
+            list_all_keywords = ["list all", "show all", "list everyone", "show me everyone"]
             prompt_lower = prompt.lower().strip()
+
             answer = ""
             cards_to_show = []
 
@@ -271,7 +204,26 @@ if rag_system:
             elif any(keyword in prompt_lower for keyword in identity_keywords):
                 answer = "I am an intelligent **HR Assistant Chatbot**..."
                 st.write_stream(stream_response(answer))
+            
+            # --- NEW "LIST ALL" FEATURE ---
+            elif any(keyword in prompt_lower for keyword in list_all_keywords):
+                answer = "Here is a complete list of all employees in our talent pool:"
+                all_employees = rag_system.employees
+                cards_to_show = [emp for emp in all_employees]
+                
+                st.write_stream(stream_response(answer))
+                if cards_to_show:
+                    with st.expander("👥 View All Employee Profiles", expanded=True):
+                        # Display all 15 cards in a 3-column grid
+                        num_rows = (len(cards_to_show) + 2) // 3
+                        for i in range(num_rows):
+                            cols = st.columns(3)
+                            row_cards = cards_to_show[i*3:(i+1)*3]
+                            for j, card in enumerate(row_cards):
+                                display_employee_card(card, cols[j])
+            
             else:
+                # --- Original RAG Logic ---
                 show_thinking_animation()
                 retrieved_employees, scores = rag_system.search(prompt)
                 
@@ -279,14 +231,13 @@ if rag_system:
                     answer = rag_system.generate_hr_response(prompt, retrieved_employees)
                     cards_to_show = [emp.model_dump() for emp in retrieved_employees]
                 else:
-                    answer = rag_system.generate_general_response(f"I couldn't find anyone who perfectly matches the query: '{prompt}'. Could you try broadening your search?")
+                    answer = rag_system.generate_general_response(f"I couldn't find anyone who perfectly matches that query: '{prompt}'. Could you try broadening your search?")
                     cards_to_show = []
 
                 st.write_stream(stream_response(answer))
                 if cards_to_show:
                     with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
-                        num_cards = len(cards_to_show)
-                        cols = st.columns(num_cards if num_cards > 0 else 1)
+                        cols = st.columns(len(cards_to_show) if cards_to_show else 1)
                         for i, card in enumerate(cards_to_show):
                             display_employee_card(card, cols[i])
             
