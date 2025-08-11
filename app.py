@@ -35,7 +35,6 @@ class Employee(BaseModel):
 
 # --- 3. RAG System (Backend Logic) ---
 class RAGSystem:
-    # (This class is unchanged)
     def __init__(self, api_key: str):
         if not api_key: raise ValueError("Groq API key is missing.")
         self.employees = EMPLOYEE_DATA['employees']
@@ -45,14 +44,17 @@ class RAGSystem:
         self.index = self._create_faiss_index()
         self.llm_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
         self.all_skills = {skill.lower() for emp in self.employees for skill in emp['skills']}
+
     def _create_documents(self) -> List[str]:
         return [f"Name: {e['name']}. Skills: {', '.join(e['skills'])}. Experience: {e['experience_years']} years. Projects: {', '.join(e['projects'])}. Notes: {e.get('notes', 'N/A')}" for e in self.employees]
+
     def _create_faiss_index(self):
         embeddings = self.embedding_model.encode(self.documents, convert_to_tensor=False)
         index = faiss.IndexIDMap(faiss.IndexFlatL2(embeddings.shape[1]))
         ids = np.array([emp['id'] for emp in self.employees])
         index.add_with_ids(embeddings, ids)
         return index
+
     def _parse_and_get_filtered_ids(self, query: str) -> Set[int]:
         query_lower = query.lower()
         candidate_ids = set(self.employee_map.keys())
@@ -64,24 +66,35 @@ class RAGSystem:
         if required_skills:
             candidate_ids.intersection_update({emp['id'] for emp in self.employees if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)})
         return candidate_ids
-    def search(self, query: str, top_k: int = 3) -> tuple[List[Employee], np.ndarray]:
+
+    # --- DYNAMIC SEARCH UPDATE ---
+    def search(self, query: str) -> tuple[List[Employee], np.ndarray]:
+        """
+        Performs a dynamic hybrid search, returning ALL candidates who meet the criteria.
+        """
         pre_filtered_ids = self._parse_and_get_filtered_ids(query)
+
         was_filtered = pre_filtered_ids != set(self.employee_map.keys())
-        if was_filtered and not pre_filtered_ids: return [], np.array([[]])
+        if was_filtered and not pre_filtered_ids:
+            return [], np.array([[]])
+
         query_embedding = self.embedding_model.encode([query])
-        k_for_search = 20
+        # Search all employees to rank them semantically
+        k_for_search = len(self.employees)
         distances, semantic_ids_list = self.index.search(query_embedding, k=k_for_search)
+
         final_candidates = []
         seen_ids = set()
+        
+        # Iterate through the full ranked list and pick out all matching candidates
         for eid in semantic_ids_list[0]:
-            if eid == -1: continue
-            if eid in pre_filtered_ids:
-                if eid not in seen_ids:
-                    final_candidates.append(Employee(**self.employee_map[eid]))
-                    seen_ids.add(eid)
-            if len(final_candidates) >= top_k: break
+            if eid != -1 and eid in pre_filtered_ids and eid not in seen_ids:
+                final_candidates.append(Employee(**self.employee_map[eid]))
+                seen_ids.add(eid)
+                
         dummy_scores = np.array([[0.0] * len(final_candidates)])
         return final_candidates, dummy_scores
+
     def _call_llm(self, user_prompt: str, system_prompt: str) -> str:
         try:
             response = self.llm_client.chat.completions.create(model="llama3-8b-8192", messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], temperature=0.7)
@@ -89,11 +102,13 @@ class RAGSystem:
         except Exception as e:
             st.error(f"LLM API Error: {e}")
             return "I'm sorry, I encountered an error while generating a response."
+
     def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
         system_prompt = """You are an expert HR Talent Acquisition Partner... (prompt unchanged)"""
         context_str = "\n---\n".join([json.dumps(emp.model_dump()) for emp in context_employees])
         user_prompt = f"""User Query: "{query}"\n\nRetrieved Candidate Profiles:\n{context_str}\n\nBased on this, generate your expert recommendation."""
         return self._call_llm(user_prompt, system_prompt)
+
     def generate_general_response(self, query: str) -> str:
         system_prompt = "You are a friendly and helpful conversational AI assistant..."
         return self._call_llm(query, system_prompt)
@@ -150,9 +165,9 @@ if rag_system:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message.get("cards"):
-                # Adaptive display for history: grid for many cards, columns for few
                 with st.expander("👥 View Candidate Profiles", expanded=False):
                     cards = message["cards"]
+                    # Grid display for many cards, columns for few
                     if len(cards) > 3:
                         num_rows = (len(cards) + 2) // 3
                         for i in range(num_rows):
@@ -191,7 +206,6 @@ if rag_system:
             greeting_keywords = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon"]
             list_all_keywords = ["list all", "show all", "list everyone", "show me everyone"]
             prompt_lower = prompt.lower().strip()
-
             answer = ""
             cards_to_show = []
 
@@ -204,26 +218,19 @@ if rag_system:
             elif any(keyword in prompt_lower for keyword in identity_keywords):
                 answer = "I am an intelligent **HR Assistant Chatbot**..."
                 st.write_stream(stream_response(answer))
-            
-            # --- NEW "LIST ALL" FEATURE ---
             elif any(keyword in prompt_lower for keyword in list_all_keywords):
                 answer = "Here is a complete list of all employees in our talent pool:"
-                all_employees = rag_system.employees
-                cards_to_show = [emp for emp in all_employees]
-                
+                cards_to_show = rag_system.employees
                 st.write_stream(stream_response(answer))
                 if cards_to_show:
                     with st.expander("👥 View All Employee Profiles", expanded=True):
-                        # Display all 15 cards in a 3-column grid
                         num_rows = (len(cards_to_show) + 2) // 3
                         for i in range(num_rows):
                             cols = st.columns(3)
                             row_cards = cards_to_show[i*3:(i+1)*3]
                             for j, card in enumerate(row_cards):
                                 display_employee_card(card, cols[j])
-            
             else:
-                # --- Original RAG Logic ---
                 show_thinking_animation()
                 retrieved_employees, scores = rag_system.search(prompt)
                 
@@ -232,14 +239,22 @@ if rag_system:
                     cards_to_show = [emp.model_dump() for emp in retrieved_employees]
                 else:
                     answer = rag_system.generate_general_response(f"I couldn't find anyone who perfectly matches that query: '{prompt}'. Could you try broadening your search?")
-                    cards_to_show = []
-
+                
                 st.write_stream(stream_response(answer))
                 if cards_to_show:
+                    # Adaptive display for new results
                     with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
-                        cols = st.columns(len(cards_to_show) if cards_to_show else 1)
-                        for i, card in enumerate(cards_to_show):
-                            display_employee_card(card, cols[i])
+                        if len(cards_to_show) > 3:
+                             num_rows = (len(cards_to_show) + 2) // 3
+                             for i in range(num_rows):
+                                cols = st.columns(3)
+                                row_cards = cards_to_show[i*3:(i+1)*3]
+                                for j, card in enumerate(row_cards):
+                                    display_employee_card(card, cols[j])
+                        else:
+                            cols = st.columns(len(cards_to_show) if cards_to_show else 1)
+                            for i, card in enumerate(cards_to_show):
+                                display_employee_card(card, cols[i])
             
             st.session_state.messages.append({"role": "assistant", "content": answer, "cards": cards_to_show})
             st.rerun()
