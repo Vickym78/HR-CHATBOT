@@ -70,7 +70,8 @@ class RAGSystem:
     # --- DYNAMIC SEARCH UPDATE ---
     def search(self, query: str) -> tuple[List[Employee], np.ndarray]:
         """
-        Performs a dynamic hybrid search, returning ALL candidates who meet the criteria.
+        Performs a dynamic hybrid search, returning ALL candidates who meet the criteria,
+        ranked by semantic similarity.
         """
         pre_filtered_ids = self._parse_and_get_filtered_ids(query)
 
@@ -79,7 +80,6 @@ class RAGSystem:
             return [], np.array([[]])
 
         query_embedding = self.embedding_model.encode([query])
-        # Search all employees to rank them semantically
         k_for_search = len(self.employees)
         distances, semantic_ids_list = self.index.search(query_embedding, k=k_for_search)
 
@@ -167,7 +167,6 @@ if rag_system:
             if message.get("cards"):
                 with st.expander("👥 View Candidate Profiles", expanded=False):
                     cards = message["cards"]
-                    # Grid display for many cards, columns for few
                     if len(cards) > 3:
                         num_rows = (len(cards) + 2) // 3
                         for i in range(num_rows):
@@ -242,7 +241,6 @@ if rag_system:
                 
                 st.write_stream(stream_response(answer))
                 if cards_to_show:
-                    # Adaptive display for new results
                     with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
                         if len(cards_to_show) > 3:
                              num_rows = (len(cards_to_show) + 2) // 3
