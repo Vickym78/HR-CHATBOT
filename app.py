@@ -1,3 +1,5 @@
+# app.py
+
 import os
 import json
 import re
@@ -14,38 +16,83 @@ from sentence_transformers import SentenceTransformer
 # --- 1. Page Configuration & UI Styling ---
 st.set_page_config(page_title="Talent Finder AI", page_icon="✨", layout="wide")
 
-# Custom CSS
+# Custom CSS for a sleek, modern, and animated interface
 st.markdown("""
 <style>
-    .stApp { background-color: #0d1117; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.7); }
+    /* General Styles */
+    .stApp {
+        background-color: #0d1117;
+    }
+
+    /* Keyframe Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.7); }
         70% { transform: scale(1.02); box-shadow: 0 0 10px 15px rgba(0, 184, 255, 0); }
         100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0); }
     }
+
+    /* Title Animation */
     .title-text {
-        font-size: 3rem; font-weight: 700; text-align: center; margin-bottom: 1rem;
+        font-size: 3rem;
+        font-weight: 700;
+        text-align: center;
+        margin-bottom: 1rem;
         background: -webkit-linear-gradient(45deg, #00FFA3, #00B8FF);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         animation: fadeIn 1s ease-out forwards;
     }
-    .loader-container { text-align: center; padding: 20px; font-size: 1.1rem; color: #8b949e; animation: fadeIn 0.5s ease-out forwards; }
-    .loader-container .robot-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; animation: pulse 2s infinite; }
+
+    /* Animated "Thinking" Loader */
+    .loader-container {
+        text-align: center;
+        padding: 20px;
+        font-size: 1.1rem;
+        color: #8b949e;
+        animation: fadeIn 0.5s ease-out forwards;
+    }
+    .loader-container .robot-icon {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 10px;
+        animation: pulse 2s infinite;
+    }
+    
+    /* Example Prompt Buttons */
     .stButton>button {
-        border: 1px solid #2d333b; border-radius: 8px; background-color: #161b22; color: #c9d1d9;
-        transition: all 0.3s ease; animation: fadeIn 0.5s ease-out forwards;
+        border: 1px solid #2d333b;
+        border-radius: 8px;
+        background-color: #161b22;
+        color: #c9d1d9;
+        transition: all 0.3s ease;
+        animation: fadeIn 0.5s ease-out forwards;
     }
     .stButton>button:hover {
-        border-color: #00B8FF; color: #00B8FF; transform: translateY(-2px);
+        border-color: #00B8FF;
+        color: #00B8FF;
+        transform: translateY(-2px);
         box-shadow: 0 4px 15px rgba(0, 184, 255, 0.2);
     }
+    
+    /* Employee Card Styling with Animation */
     .employee-card {
-        border: 1px solid #2d333b; border-radius: 12px; padding: 20px; background-color: #161b22;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2); transition: transform 0.3s ease, box-shadow 0.3s ease;
-        animation: fadeIn 0.5s ease-out forwards; height: 100%;
+        border: 1px solid #2d333b;
+        border-radius: 12px;
+        padding: 20px;
+        background-color: #161b22;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        animation: fadeIn 0.5s ease-out forwards;
+        height: 100%; /* Ensure cards in a row have same height */
     }
     .employee-card:hover {
-        transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0, 184, 255, 0.25); border-color: #00B8FF;
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0, 184, 255, 0.25);
+        border-color: #00B8FF;
     }
     .employee-card h3 { color: #00B8FF; margin-top: 0; }
     .employee-card p { color: #c9d1d9; font-size: 0.95rem; }
@@ -55,7 +102,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- 2. Data ---
+# --- 2. Data and Models ---
 EMPLOYEE_DATA = {
   "employees": [
     { "id": 1, "name": "Alice Johnson", "skills": ["Python", "React", "AWS", "Node.js"], "experience_years": 5, "projects": ["E-commerce Platform Migration", "Healthcare Dashboard UI"], "availability": "available" },
@@ -86,7 +133,7 @@ class Employee(BaseModel):
     notes: Optional[str] = None
 
 
-# --- 3. RAG System ---
+# --- 3. RAG System (Backend Logic) ---
 class RAGSystem:
     def __init__(self, api_key: str):
         if not api_key:
@@ -109,12 +156,78 @@ class RAGSystem:
         index.add_with_ids(embeddings, ids)
         return index
 
-    def search(self, query: str, top_k: int = 15) -> tuple[List[Employee], np.ndarray]:
+    def _parse_and_get_filtered_ids(self, query: str) -> Set[int]:
+        query_lower = query.lower()
+        filtered_ids = set(self.employee_map.keys())
+        exp_match = re.search(r'(\d+)\+?\s*years', query_lower)
+        if exp_match:
+            min_exp = int(exp_match.group(1))
+            filtered_ids.intersection_update({emp['id'] for emp in self.employees if emp['experience_years'] >= min_exp})
+        required_skills = {skill for skill in self.all_skills if skill in query_lower}
+        if required_skills:
+            filtered_ids.intersection_update({
+                emp['id'] for emp in self.employees 
+                if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)
+            })
+        return filtered_ids
+
+    def search(self, query: str, top_k: int = 3) -> tuple[List[Employee], np.ndarray]:
+        pre_filtered_ids = self._parse_and_get_filtered_ids(query)
         query_embedding = self.embedding_model.encode([query])
-        distances, semantic_ids_list = self.index.search(query_embedding, k=top_k)
-        final_candidates = [Employee(**self.employee_map[eid]) for eid in semantic_ids_list[0] if eid != -1]
+        distances, semantic_ids_list = self.index.search(query_embedding, k=10)
+        final_candidates = []
+        if pre_filtered_ids != set(self.employee_map.keys()):
+             for eid in semantic_ids_list[0]:
+                if eid in pre_filtered_ids:
+                    final_candidates.append(Employee(**self.employee_map[eid]))
+                if len(final_candidates) >= top_k:
+                    break
+        if len(final_candidates) < top_k:
+            existing_ids = {c.id for c in final_candidates}
+            for eid in semantic_ids_list[0]:
+                if eid != -1 and eid not in existing_ids:
+                    final_candidates.append(Employee(**self.employee_map[eid]))
+                if len(final_candidates) >= top_k:
+                    break
         dummy_scores = np.array([[0.0] * len(final_candidates)])
         return final_candidates, dummy_scores
+
+    def _call_llm(self, user_prompt: str, system_prompt: str) -> str:
+        try:
+            response = self.llm_client.chat.completions.create(model="llama3-8b-8192", messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], temperature=0.7)
+            return response.choices[0].message.content
+        except Exception as e:
+            st.error(f"LLM API Error: {e}")
+            return "I'm sorry, I encountered an error while generating a response."
+
+    def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
+        system_prompt = """
+        You are an expert HR Talent Acquisition Partner. Your goal is to provide a detailed, persuasive, and personalized recommendation based on the user's request and the provided candidate data.
+
+        Follow these rules strictly:
+        1.  **Acknowledge the Query:** Start with a brief introductory sentence that acknowledges the user's request.
+        2.  **Detailed Candidate Analysis:**
+            - Present each candidate in a separate, well-defined section using their name as a sub-header.
+            - For each candidate, **do not just list their skills or projects.** You MUST synthesize this information.
+            - **Crucially, explain *why* they are a perfect fit by explicitly connecting their specific skills and past project experience to the keywords and intent of the user's query.** For example, if the query is about "healthcare ML," highlight their project named "Medical Diagnosis Platform" and explain its relevance.
+        3.  **Persuasive Tone:** Use confident and professional language to build trust in your recommendations.
+        4.  **Proactive Closing:** Conclude your entire response with a helpful, proactive statement, suggesting next steps (e.g., "Would you like me to provide more details about their specific projects?" or "I can check their calendars for a meeting.").
+        5.  **Formatting:** Use Markdown extensively (bolding, italics, lists) to make the response highly readable and professional.
+        """
+        context_str = "\n---\n".join([json.dumps(emp.model_dump()) for emp in context_employees])
+        user_prompt = f"""
+        User Query: "{query}"
+
+        Retrieved Candidate Profiles:
+        {context_str}
+
+        Based on the provided user query and candidate profiles, please generate your expert recommendation following all the rules I've given you.
+        """
+        return self._call_llm(user_prompt, system_prompt)
+
+    def generate_general_response(self, query: str) -> str:
+        system_prompt = "You are a friendly and helpful conversational AI assistant. Use Markdown for all formatting."
+        return self._call_llm(query, system_prompt)
 
 @st.cache_resource
 def load_rag_system():
@@ -124,8 +237,7 @@ def load_rag_system():
         st.error(f"Initialization failed: {e}")
         return None
 
-
-# --- 4. Helpers ---
+# --- 4. UI Helper Functions ---
 def stream_response(text):
     for word in text.split():
         yield word + " "
@@ -151,21 +263,108 @@ def display_employee_card(card_data: dict, container):
             unsafe_allow_html=True
         )
 
+def show_thinking_animation():
+    thinking_steps = ["🔍 Parsing query...", "⚙️ Applying filters...", "🧠 Analyzing candidates..."]
+    placeholder = st.empty()
+    for step in thinking_steps:
+        placeholder.markdown(f"""<div class="loader-container"><div class="robot-icon">🤖</div><div>{step}</div></div>""", unsafe_allow_html=True)
+        time.sleep(0.6)
+    placeholder.empty()
 
-# --- 5. Main ---
+def handle_prompt_click(prompt_text):
+    st.session_state.clicked_prompt = prompt_text
+
+
+# --- 5. Main Application ---
+with st.sidebar:
+    st.header("About")
+    st.markdown("This AI chatbot uses a hybrid search system to find the right talent.")
+    st.markdown("---")
+    if st.button("Clear Chat History", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.clicked_prompt = None
+        st.rerun()
+
 st.markdown('<h1 class="title-text">Talent Finder AI ✨</h1>', unsafe_allow_html=True)
 rag_system = load_rag_system()
 
 if rag_system:
-    prompt = st.chat_input("Find an employee...")
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "clicked_prompt" not in st.session_state:
+        st.session_state.clicked_prompt = None
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message.get("cards"):
+                with st.expander("👥 View Recommended Candidate Profiles", expanded=False):
+                    num_cards = len(message["cards"])
+                    cols = st.columns(num_cards if num_cards > 0 else 1)
+                    for i, card in enumerate(message["cards"]):
+                        display_employee_card(card, cols[i])
+
+    if not st.session_state.messages:
+        st.info("Ask me anything about our talent pool! Try queries with specific constraints.")
+        st.markdown("<div style='text-align: center; margin-bottom: 10px;'>Or try one of these:</div>", unsafe_allow_html=True)
+        cols = st.columns(3)
+        prompts = ["Python devs with 5+ years experience", "Who knows both AWS and Docker?", "Who is your developer?"]
+        if cols[0].button(prompts[0], use_container_width=True, on_click=handle_prompt_click, args=[prompts[0]]): pass
+        if cols[1].button(prompts[1], use_container_width=True, on_click=handle_prompt_click, args=[prompts[1]]): pass
+        if cols[2].button(prompts[2], use_container_width=True, on_click=handle_prompt_click, args=[prompts[2]]): pass
+
+    _, input_col, _ = st.columns([1, 3, 1])
+    with input_col:
+        prompt = st.chat_input("Find an employee...") or st.session_state.clicked_prompt
+    
     if prompt:
-        retrieved_employees, _ = rag_system.search(prompt, top_k=10)
-        cards_to_show = [emp.model_dump() for emp in retrieved_employees]
-        if cards_to_show:
-            with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
-                for i in range(0, len(cards_to_show), 3):
-                    cols = st.columns(3)
-                    for j, card in enumerate(cards_to_show[i:i+3]):
-                        display_employee_card(card, cols[j])
+        st.session_state.clicked_prompt = None
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            developer_keywords = ["who made you", "your developer", "created you", "invented you", "creator", "vicky"]
+            identity_keywords = ["who are you", "what are you"]
+            greeting_keywords = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon"]
+            prompt_lower = prompt.lower().strip()
+
+            answer = ""
+            cards_to_show = []
+
+            if prompt_lower in greeting_keywords:
+                answer = "Hello! How can I assist you in finding the right talent today?"
+                st.write_stream(stream_response(answer))
+
+            elif any(keyword in prompt_lower for keyword in developer_keywords):
+                answer = "I was created by **Vicky Mahato**. He's a talented developer who built me to help HR teams find the best talent efficiently! 🚀"
+                st.write_stream(stream_response(answer))
+
+            elif any(keyword in prompt_lower for keyword in identity_keywords):
+                answer = "I am an intelligent **HR Assistant Chatbot** 🤖, designed to help you find the best talent in our company. Ask me about our employees' skills or project experience!"
+                st.write_stream(stream_response(answer))
+            
+            else:
+                show_thinking_animation()
+                retrieved_employees, scores = rag_system.search(prompt)
+                
+                if retrieved_employees:
+                    answer = rag_system.generate_hr_response(prompt, retrieved_employees)
+                    cards_to_show = [emp.model_dump() for emp in retrieved_employees]
+                else:
+                    answer = rag_system.generate_general_response(f"I couldn't find anyone who perfectly matches the query: '{prompt}'. Could you try broadening your search?")
+                    cards_to_show = []
+
+                st.write_stream(stream_response(answer))
+                if cards_to_show:
+                    with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
+                        num_cards = len(cards_to_show)
+                        cols = st.columns(num_cards if num_cards > 0 else 1)
+                        for i, card in enumerate(cards_to_show):
+                            display_employee_card(card, cols[i])
+            
+            st.session_state.messages.append({"role": "assistant", "content": answer, "cards": cards_to_show})
+            st.rerun()
 else:
-    st.warning("App could not start. Please check API key.")
+    st.warning("Application could not start. Please verify your API key in Streamlit secrets.")
