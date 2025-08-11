@@ -171,7 +171,7 @@ class RAGSystem:
             })
         return filtered_ids
 
-    def search(self, query: str, top_k: int = 3) -> tuple[List[Employee], np.ndarray]:
+    def search(self, query: str, top_k: int = 15) -> tuple[List[Employee], np.ndarray]:
         pre_filtered_ids = self._parse_and_get_filtered_ids(query)
         query_embedding = self.embedding_model.encode([query])
         distances, semantic_ids_list = self.index.search(query_embedding, k=10)
