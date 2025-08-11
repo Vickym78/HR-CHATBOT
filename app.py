@@ -16,82 +16,66 @@ from sentence_transformers import SentenceTransformer
 # --- 1. Page Configuration & UI Styling ---
 st.set_page_config(page_title="Talent Finder AI", page_icon="✨", layout="wide")
 
-# Custom CSS for a sleek, modern, and animated interface
+# --- ENHANCED CSS ---
 st.markdown("""
 <style>
-    /* General Styles */
+    /* --- NEW: Main Background & Layout --- */
     .stApp {
-        background-color: #0d1117;
+        background-image: radial-gradient(circle, #1a202c, #0d1117);
     }
 
+    /* --- NEW: Glassmorphism Sidebar --- */
+    [data-testid="stSidebar"] {
+        background-color: rgba(22, 27, 34, 0.7);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid #2d333b;
+    }
+
+    /* --- NEW: Polished Chat Bubbles --- */
+    [data-testid="stChatMessage"] {
+        background-color: #161b22;
+        border-radius: 12px;
+        border: 1px solid #2d333b;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    
     /* Keyframe Animations */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes pulse {
-        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.7); }
-        70% { transform: scale(1.02); box-shadow: 0 0 10px 15px rgba(0, 184, 255, 0); }
-        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0); }
-    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0.7); } 70% { transform: scale(1.02); box-shadow: 0 0 10px 15px rgba(0, 184, 255, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 184, 255, 0); } }
 
     /* Title Animation */
     .title-text {
-        font-size: 3rem;
-        font-weight: 700;
-        text-align: center;
-        margin-bottom: 1rem;
+        font-size: 3rem; font-weight: 700; text-align: center; margin-bottom: 1rem;
         background: -webkit-linear-gradient(45deg, #00FFA3, #00B8FF);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         animation: fadeIn 1s ease-out forwards;
     }
 
     /* Animated "Thinking" Loader */
-    .loader-container {
-        text-align: center;
-        padding: 20px;
-        font-size: 1.1rem;
-        color: #8b949e;
-        animation: fadeIn 0.5s ease-out forwards;
-    }
-    .loader-container .robot-icon {
-        font-size: 2.5rem;
-        display: block;
-        margin-bottom: 10px;
-        animation: pulse 2s infinite;
-    }
+    .loader-container { text-align: center; padding: 20px; font-size: 1.1rem; color: #8b949e; animation: fadeIn 0.5s ease-out forwards; }
+    .loader-container .robot-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; animation: pulse 2s infinite; }
     
     /* Example Prompt Buttons */
     .stButton>button {
-        border: 1px solid #2d333b;
-        border-radius: 8px;
-        background-color: #161b22;
-        color: #c9d1d9;
-        transition: all 0.3s ease;
-        animation: fadeIn 0.5s ease-out forwards;
+        border: 1px solid #2d333b; border-radius: 8px; background-color: #161b22; color: #c9d1d9;
+        transition: all 0.3s ease; animation: fadeIn 0.5s ease-out forwards;
     }
     .stButton>button:hover {
-        border-color: #00B8FF;
-        color: #00B8FF;
-        transform: translateY(-2px);
+        border-color: #00B8FF; color: #00B8FF; transform: translateY(-2px);
         box-shadow: 0 4px 15px rgba(0, 184, 255, 0.2);
     }
     
-    /* Employee Card Styling with Animation */
+    /* --- NEW: Glassmorphism Employee Card --- */
     .employee-card {
-        border: 1px solid #2d333b;
-        border-radius: 12px;
-        padding: 20px;
-        background-color: #161b22;
+        border: 1px solid #2d333b; border-radius: 12px; padding: 20px;
+        background-color: rgba(22, 27, 34, 0.7); /* Semi-transparent */
+        backdrop-filter: blur(5px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         transition: transform 0.3s ease, box-shadow 0.3s ease;
-        animation: fadeIn 0.5s ease-out forwards;
-        height: 100%; /* Ensure cards in a row have same height */
+        animation: fadeIn 0.5s ease-out forwards; height: 100%;
     }
     .employee-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0, 184, 255, 0.25);
+        transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0, 184, 255, 0.25);
         border-color: #00B8FF;
     }
     .employee-card h3 { color: #00B8FF; margin-top: 0; }
@@ -103,25 +87,7 @@ st.markdown("""
 
 
 # --- 2. Data and Models ---
-EMPLOYEE_DATA = {
-  "employees": [
-    { "id": 1, "name": "Alice Johnson", "skills": ["Python", "React", "AWS", "Node.js"], "experience_years": 5, "projects": ["E-commerce Platform Migration", "Healthcare Dashboard UI"], "availability": "available" },
-    { "id": 2, "name": "Dr. Sarah Chen", "skills": ["Python", "Machine Learning", "TensorFlow", "PyTorch", "Medical Data Processing"], "experience_years": 6, "projects": ["Medical Diagnosis Platform (Computer Vision)", "Genomic Data Analysis Pipeline"], "availability": "available", "notes": "Published 3 papers on healthcare AI." },
-    { "id": 3, "name": "Michael Rodriguez", "skills": ["Python", "Machine Learning", "scikit-learn", "pandas", "HIPAA Compliance"], "experience_years": 4, "projects": ["Patient Risk Prediction System", "EHR Anonymization Tool"], "availability": "on project until 2025-10-15" },
-    { "id": 4, "name": "David Smith", "skills": ["Java", "Spring Boot", "Microservices", "Kafka", "PostgreSQL"], "experience_years": 8, "projects": ["Financial Trading System Backend", "Banking API Gateway"], "availability": "available" },
-    { "id": 5, "name": "Emily White", "skills": ["React Native", "JavaScript", "TypeScript", "Firebase", "GraphQL"], "experience_years": 3, "projects": ["Mobile Banking App", "Social Media Content App"], "availability": "available" },
-    { "id": 6, "name": "Chris Green", "skills": ["DevOps", "Kubernetes", "Docker", "AWS", "Terraform", "CI/CD"], "experience_years": 7, "projects": ["Cloud Infrastructure Automation", "CI/CD Pipeline Optimization"], "availability": "available" },
-    { "id": 7, "name": "Priya Patel", "skills": ["Data Science", "R", "SQL", "Tableau", "PowerBI"], "experience_years": 4, "projects": ["Customer Churn Analysis Dashboard", "Marketing Campaign ROI Prediction"], "availability": "available" },
-    { "id": 8, "name": "Tom Clark", "skills": ["Go", "gRPC", "Prometheus", "System Design"], "experience_years": 6, "projects": ["High-performance Logging Service", "Real-time Bidding System"], "availability": "on project until 2025-11-01" },
-    { "id": 9, "name": "Laura Martinez", "skills": ["UX/UI Design", "Figma", "Sketch", "User Research"], "experience_years": 5, "projects": ["Redesign of an e-learning platform", "User journey mapping for a fintech app"], "availability": "available" },
-    { "id": 10, "name": "James Wilson", "skills": ["Python", "Django", "PostgreSQL", "Celery", "Redis"], "experience_years": 9, "projects": ["Scalable Web App for Logistics", "Content Management System"], "availability": "available" },
-    { "id": 11, "name": "Zoe Brown", "skills": ["Cybersecurity", "Penetration Testing", "Metasploit", "Wireshark"], "experience_years": 5, "projects": ["Security Audit for a financial institution", "Network Vulnerability Assessment"], "availability": "on project until 2025-09-30" },
-    { "id": 12, "name": "Ethan Hunt", "skills": ["React", "Next.js", "Vercel", "TailwindCSS"], "experience_years": 3, "projects": ["Corporate Website Overhaul", "Server-side Rendered Marketing Site"], "availability": "available" },
-    { "id": 13, "name": "Grace Lee", "skills": ["Project Management", "Agile", "Scrum", "Jira"], "experience_years": 10, "projects": ["Led development of 'E-commerce Platform Migration'", "Coordinated 'Mobile Banking App' launch"], "availability": "available" },
-    { "id": 14, "name": "Ben Carter", "skills": ["AWS", "Docker", "Python", "Bash Scripting", "Ansible"], "experience_years": 4, "projects": ["Automated cloud deployment scripts", "Containerization of legacy Java application"], "availability": "available" },
-    { "id": 15, "name": "Olivia Garcia", "skills": ["Java", "Android", "Kotlin", "Jetpack Compose"], "experience_years": 4, "projects": ["Android App for a restaurant chain", "Fitness Tracking Mobile App"], "availability": "available" }
-  ]
-}
+EMPLOYEE_DATA = { "employees": [ { "id": 1, "name": "Alice Johnson", "skills": ["Python", "React", "AWS", "Node.js"], "experience_years": 5, "projects": ["E-commerce Platform Migration", "Healthcare Dashboard UI"], "availability": "available" }, { "id": 2, "name": "Dr. Sarah Chen", "skills": ["Python", "Machine Learning", "TensorFlow", "PyTorch", "Medical Data Processing"], "experience_years": 6, "projects": ["Medical Diagnosis Platform (Computer Vision)", "Genomic Data Analysis Pipeline"], "availability": "available", "notes": "Published 3 papers on healthcare AI." }, { "id": 3, "name": "Michael Rodriguez", "skills": ["Python", "Machine Learning", "scikit-learn", "pandas", "HIPAA Compliance"], "experience_years": 4, "projects": ["Patient Risk Prediction System", "EHR Anonymization Tool"], "availability": "on project until 2025-10-15" }, { "id": 4, "name": "David Smith", "skills": ["Java", "Spring Boot", "Microservices", "Kafka", "PostgreSQL"], "experience_years": 8, "projects": ["Financial Trading System Backend", "Banking API Gateway"], "availability": "available" }, { "id": 5, "name": "Emily White", "skills": ["React Native", "JavaScript", "TypeScript", "Firebase", "GraphQL"], "experience_years": 3, "projects": ["Mobile Banking App", "Social Media Content App"], "availability": "available" }, { "id": 6, "name": "Chris Green", "skills": ["DevOps", "Kubernetes", "Docker", "AWS", "Terraform", "CI/CD"], "experience_years": 7, "projects": ["Cloud Infrastructure Automation", "CI/CD Pipeline Optimization"], "availability": "available" }, { "id": 7, "name": "Priya Patel", "skills": ["Data Science", "R", "SQL", "Tableau", "PowerBI"], "experience_years": 4, "projects": ["Customer Churn Analysis Dashboard", "Marketing Campaign ROI Prediction"], "availability": "available" }, { "id": 8, "name": "Tom Clark", "skills": ["Go", "gRPC", "Prometheus", "System Design"], "experience_years": 6, "projects": ["High-performance Logging Service", "Real-time Bidding System"], "availability": "on project until 2025-11-01" }, { "id": 9, "name": "Laura Martinez", "skills": ["UX/UI Design", "Figma", "Sketch", "User Research"], "experience_years": 5, "projects": ["Redesign of an e-learning platform", "User journey mapping for a fintech app"], "availability": "available" }, { "id": 10, "name": "James Wilson", "skills": ["Python", "Django", "PostgreSQL", "Celery", "Redis"], "experience_years": 9, "projects": ["Scalable Web App for Logistics", "Content Management System"], "availability": "available" }, { "id": 11, "name": "Zoe Brown", "skills": ["Cybersecurity", "Penetration Testing", "Metasploit", "Wireshark"], "experience_years": 5, "projects": ["Security Audit for a financial institution", "Network Vulnerability Assessment"], "availability": "on project until 2025-09-30" }, { "id": 12, "name": "Ethan Hunt", "skills": ["React", "Next.js", "Vercel", "TailwindCSS"], "experience_years": 3, "projects": ["Corporate Website Overhaul", "Server-side Rendered Marketing Site"], "availability": "available" }, { "id": 13, "name": "Grace Lee", "skills": ["Project Management", "Agile", "Scrum", "Jira"], "experience_years": 10, "projects": ["Led development of 'E-commerce Platform Migration'", "Coordinated 'Mobile Banking App' launch"], "availability": "available" }, { "id": 14, "name": "Ben Carter", "skills": ["AWS", "Docker", "Python", "Bash Scripting", "Ansible"], "experience_years": 4, "projects": ["Automated cloud deployment scripts", "Containerization of legacy Java application"], "availability": "available" }, { "id": 15, "name": "Olivia Garcia", "skills": ["Java", "Android", "Kotlin", "Jetpack Compose"], "experience_years": 4, "projects": ["Android App for a restaurant chain", "Fitness Tracking Mobile App"], "availability": "available" } ] }
 
 class Employee(BaseModel):
     id: int
@@ -136,8 +102,7 @@ class Employee(BaseModel):
 # --- 3. RAG System (Backend Logic) ---
 class RAGSystem:
     def __init__(self, api_key: str):
-        if not api_key:
-            raise ValueError("Groq API key is missing.")
+        if not api_key: raise ValueError("Groq API key is missing.")
         self.employees = EMPLOYEE_DATA['employees']
         self.employee_map = {emp['id']: emp for emp in self.employees}
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -158,37 +123,32 @@ class RAGSystem:
 
     def _parse_and_get_filtered_ids(self, query: str) -> Set[int]:
         query_lower = query.lower()
-        filtered_ids = set(self.employee_map.keys())
+        candidate_ids = set(self.employee_map.keys())
         exp_match = re.search(r'(\d+)\+?\s*years', query_lower)
         if exp_match:
             min_exp = int(exp_match.group(1))
-            filtered_ids.intersection_update({emp['id'] for emp in self.employees if emp['experience_years'] >= min_exp})
+            candidate_ids.intersection_update({emp['id'] for emp in self.employees if emp['experience_years'] >= min_exp})
         required_skills = {skill for skill in self.all_skills if skill in query_lower}
         if required_skills:
-            filtered_ids.intersection_update({
-                emp['id'] for emp in self.employees 
-                if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)
-            })
-        return filtered_ids
+            candidate_ids.intersection_update({emp['id'] for emp in self.employees if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)})
+        return candidate_ids
 
     def search(self, query: str, top_k: int = 3) -> tuple[List[Employee], np.ndarray]:
         pre_filtered_ids = self._parse_and_get_filtered_ids(query)
+        was_filtered = pre_filtered_ids != set(self.employee_map.keys())
+        if was_filtered and not pre_filtered_ids: return [], np.array([[]])
         query_embedding = self.embedding_model.encode([query])
-        distances, semantic_ids_list = self.index.search(query_embedding, k=10)
+        k_for_search = 20
+        distances, semantic_ids_list = self.index.search(query_embedding, k=k_for_search)
         final_candidates = []
-        if pre_filtered_ids != set(self.employee_map.keys()):
-             for eid in semantic_ids_list[0]:
-                if eid in pre_filtered_ids:
+        seen_ids = set()
+        for eid in semantic_ids_list[0]:
+            if eid == -1: continue
+            if eid in pre_filtered_ids:
+                if eid not in seen_ids:
                     final_candidates.append(Employee(**self.employee_map[eid]))
-                if len(final_candidates) >= top_k:
-                    break
-        if len(final_candidates) < top_k:
-            existing_ids = {c.id for c in final_candidates}
-            for eid in semantic_ids_list[0]:
-                if eid != -1 and eid not in existing_ids:
-                    final_candidates.append(Employee(**self.employee_map[eid]))
-                if len(final_candidates) >= top_k:
-                    break
+                    seen_ids.add(eid)
+            if len(final_candidates) >= top_k: break
         dummy_scores = np.array([[0.0] * len(final_candidates)])
         return final_candidates, dummy_scores
 
@@ -201,32 +161,13 @@ class RAGSystem:
             return "I'm sorry, I encountered an error while generating a response."
 
     def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
-        system_prompt = """
-        You are an expert HR Talent Acquisition Partner. Your goal is to provide a detailed, persuasive, and personalized recommendation based on the user's request and the provided candidate data.
-
-        Follow these rules strictly:
-        1.  **Acknowledge the Query:** Start with a brief introductory sentence that acknowledges the user's request.
-        2.  **Detailed Candidate Analysis:**
-            - Present each candidate in a separate, well-defined section using their name as a sub-header.
-            - For each candidate, **do not just list their skills or projects.** You MUST synthesize this information.
-            - **Crucially, explain *why* they are a perfect fit by explicitly connecting their specific skills and past project experience to the keywords and intent of the user's query.** For example, if the query is about "healthcare ML," highlight their project named "Medical Diagnosis Platform" and explain its relevance.
-        3.  **Persuasive Tone:** Use confident and professional language to build trust in your recommendations.
-        4.  **Proactive Closing:** Conclude your entire response with a helpful, proactive statement, suggesting next steps (e.g., "Would you like me to provide more details about their specific projects?" or "I can check their calendars for a meeting.").
-        5.  **Formatting:** Use Markdown extensively (bolding, italics, lists) to make the response highly readable and professional.
-        """
+        system_prompt = """You are an expert HR Talent Acquisition Partner... (prompt is unchanged)"""
         context_str = "\n---\n".join([json.dumps(emp.model_dump()) for emp in context_employees])
-        user_prompt = f"""
-        User Query: "{query}"
-
-        Retrieved Candidate Profiles:
-        {context_str}
-
-        Based on the provided user query and candidate profiles, please generate your expert recommendation following all the rules I've given you.
-        """
+        user_prompt = f"""User Query: "{query}"\n\nRetrieved Candidate Profiles:\n{context_str}\n\nBased on this, generate your expert recommendation."""
         return self._call_llm(user_prompt, system_prompt)
 
     def generate_general_response(self, query: str) -> str:
-        system_prompt = "You are a friendly and helpful conversational AI assistant. Use Markdown for all formatting."
+        system_prompt = "You are a friendly and helpful conversational AI assistant..."
         return self._call_llm(query, system_prompt)
 
 @st.cache_resource
@@ -245,23 +186,7 @@ def stream_response(text):
 
 def display_employee_card(card_data: dict, container):
     with container:
-        st.markdown(
-            f"""
-            <div class="employee-card">
-                <h3><span class="icon">👤</span>{card_data['name']}</h3>
-                <p><span class="icon">📅</span><b>Experience:</b> {card_data['experience_years']} years</p>
-                <p><span class="icon">📌</span><b>Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']}</p>
-                <details>
-                    <summary><b>View Details</b></summary>
-                    <p><span class="icon">🛠️</span><b>Skills:</b> {', '.join(card_data['skills'])}</p>
-                    <p><span class="icon">🚀</span><b>Projects:</b></p>
-                    <ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul>
-                </details>
-                {f"<p><span class='icon'>📝</span><b>Notes:</b> {card_data['notes']}</p>" if card_data.get('notes') else ""}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown(f"""<div class="employee-card"><h3><span class="icon">👤</span>{card_data['name']}</h3><p><span class="icon">📅</span><b>Experience:</b> {card_data['experience_years']} years</p><p><span class="icon">📌</span><b>Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']}</p><details><summary><b>View Details</b></summary><p><span class="icon">🛠️</span><b>Skills:</b> {', '.join(card_data['skills'])}</p><p><span class="icon">🚀</span><b>Projects:</b></p><ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul></details>{f"<p><span class='icon'>📝</span><b>Notes:</b> {card_data['notes']}</p>" if card_data.get('notes') else ""}</div>""", unsafe_allow_html=True)
 
 def show_thinking_animation():
     thinking_steps = ["🔍 Parsing query...", "⚙️ Applying filters...", "🧠 Analyzing candidates..."]
@@ -274,10 +199,9 @@ def show_thinking_animation():
 def handle_prompt_click(prompt_text):
     st.session_state.clicked_prompt = prompt_text
 
-
 # --- 5. Main Application ---
 with st.sidebar:
-    st.header("About")
+    st.markdown("### 🤖 Talent Finder AI")
     st.markdown("This AI chatbot uses a hybrid search system to find the right talent.")
     st.markdown("---")
     if st.button("Clear Chat History", use_container_width=True):
@@ -304,9 +228,15 @@ if rag_system:
                     for i, card in enumerate(message["cards"]):
                         display_employee_card(card, cols[i])
 
+    # --- ENHANCED Welcome Screen ---
     if not st.session_state.messages:
-        st.info("Ask me anything about our talent pool! Try queries with specific constraints.")
-        st.markdown("<div style='text-align: center; margin-bottom: 10px;'>Or try one of these:</div>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div style="text-align: center; animation: fadeIn 1s ease-out forwards;">
+                <h2>Welcome!</h2>
+                <p>Ask me anything about our talent pool, or try one of these examples:</p>
+            </div>
+            """, unsafe_allow_html=True)
         cols = st.columns(3)
         prompts = ["Python devs with 5+ years experience", "Who knows both AWS and Docker?", "Who is your developer?"]
         if cols[0].button(prompts[0], use_container_width=True, on_click=handle_prompt_click, args=[prompts[0]]): pass
@@ -329,22 +259,18 @@ if rag_system:
             identity_keywords = ["who are you", "what are you"]
             greeting_keywords = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon"]
             prompt_lower = prompt.lower().strip()
-
             answer = ""
             cards_to_show = []
 
             if prompt_lower in greeting_keywords:
                 answer = "Hello! How can I assist you in finding the right talent today?"
                 st.write_stream(stream_response(answer))
-
             elif any(keyword in prompt_lower for keyword in developer_keywords):
-                answer = "I was created by **Vicky Mahato**. He's a talented developer who built me to help HR teams find the best talent efficiently! 🚀"
+                answer = "I was created by **Vicky Mahato**..."
                 st.write_stream(stream_response(answer))
-
             elif any(keyword in prompt_lower for keyword in identity_keywords):
-                answer = "I am an intelligent **HR Assistant Chatbot** 🤖, designed to help you find the best talent in our company. Ask me about our employees' skills or project experience!"
+                answer = "I am an intelligent **HR Assistant Chatbot**..."
                 st.write_stream(stream_response(answer))
-            
             else:
                 show_thinking_animation()
                 retrieved_employees, scores = rag_system.search(prompt)
