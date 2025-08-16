@@ -4,13 +4,14 @@ import os
 import json
 import re
 import time
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Tuple
+from enum import Enum, auto
 
 import numpy as np
 import faiss
 import streamlit as st
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
 
 # --- 1. Page Configuration & UI Styling ---
@@ -32,11 +33,17 @@ class Employee(BaseModel):
     availability: str
     notes: Optional[str] = None
 
+# ✨ NEW: Enum to represent the user's intent
+class UserIntent(Enum):
+    FIND_PEOPLE = auto()
+    LIST_ALL = auto()
+    CHITCHAT = auto()
 
 # --- 3. RAG System (Backend Logic) ---
 class RAGSystem:
     def __init__(self, api_key: str):
-        if not api_key: raise ValueError("Groq API key is missing.")
+        if not api_key:
+            raise ValueError("Groq API key is missing.")
         self.employees = EMPLOYEE_DATA['employees']
         self.employee_map = {emp['id']: emp for emp in self.employees}
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -55,73 +62,147 @@ class RAGSystem:
         index.add_with_ids(embeddings, ids)
         return index
 
+    def _call_llm(self, user_prompt: str, system_prompt: str, model: str = "llama3-8b-8192", temperature: float = 0.5, is_json: bool = False) -> str:
+        try:
+            response = self.llm_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=temperature,
+                response_format={"type": "json_object"} if is_json else None,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            st.error(f"LLM API Error: {e}")
+            return '{"error": "Failed to get a response from the AI."}' if is_json else "I'm sorry, I encountered an error while generating a response."
+
+    # ✨ NEW: Intelligent query analysis using an LLM
+    def analyze_query(self, query: str) -> Tuple[UserIntent, str]:
+        """
+        Classifies the user's intent and expands the query if it's for finding people.
+        """
+        system_prompt = f"""
+        You are an intelligent query analyzer for an HR system. Your task is to determine the user's intent and, if they are searching for people, expand their query to be more effective for semantic search.
+
+        Available intents are:
+        - "FIND_PEOPLE": The user is looking for candidates with specific skills, experience, or project history.
+        - "LIST_ALL": The user wants a complete list of all employees. Keywords: "list all", "show all", "show everyone".
+        - "CHITCHAT": The user is having a general conversation, asking about you, or greeting you. Keywords: "who are you", "who made you", "hello", "what can you do".
+
+        Based on the user query, return a JSON object with two keys:
+        1. "intent": One of the three intents listed above.
+        2. "expanded_query":
+           - If the intent is "FIND_PEOPLE", rephrase the user's query into a detailed description of the ideal candidate. Example: "python dev with 5 years" becomes "A software developer with at least 5 years of experience specializing in Python programming.".
+           - If the intent is "LIST_ALL" or "CHITCHAT", return the original user query verbatim.
+
+        Respond ONLY with the JSON object.
+        """
+        response_str = self._call_llm(query, system_prompt, is_json=True, temperature=0.1)
+        try:
+            result = json.loads(response_str)
+            intent_str = result.get("intent", "CHITCHAT")
+            expanded_query = result.get("expanded_query", query)
+            
+            intent_map = {
+                "FIND_PEOPLE": UserIntent.FIND_PEOPLE,
+                "LIST_ALL": UserIntent.LIST_ALL,
+                "CHITCHAT": UserIntent.CHITCHAT,
+            }
+            return intent_map.get(intent_str, UserIntent.CHITCHAT), expanded_query
+        except (json.JSONDecodeError, KeyError):
+            # If LLM fails to produce valid JSON, default to a safe option
+            return UserIntent.FIND_PEOPLE, query
+
     def _parse_and_get_filtered_ids(self, query: str) -> Set[int]:
+        """Performs hard filtering based on explicit criteria in the query."""
         query_lower = query.lower()
         candidate_ids = set(self.employee_map.keys())
+        
+        # Filter by experience
         exp_match = re.search(r'(\d+)\+?\s*years', query_lower)
         if exp_match:
             min_exp = int(exp_match.group(1))
             candidate_ids.intersection_update({emp['id'] for emp in self.employees if emp['experience_years'] >= min_exp})
+            
+        # Filter by skills
         required_skills = {skill for skill in self.all_skills if skill in query_lower}
         if required_skills:
-            candidate_ids.intersection_update({emp['id'] for emp in self.employees if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)})
+            candidate_ids.intersection_update({
+                emp['id'] for emp in self.employees 
+                if all(req_skill in [s.lower() for s in emp['skills']] for req_skill in required_skills)
+            })
         return candidate_ids
 
-    # --- DYNAMIC SEARCH UPDATE ---
-    def search(self, query: str) -> tuple[List[Employee], np.ndarray]:
+    def search(self, original_query: str, expanded_query: str) -> List[Employee]:
         """
-        Performs a dynamic hybrid search, returning ALL candidates who meet the criteria,
-        ranked by semantic similarity.
+        Performs a dynamic hybrid search using both metadata filtering and semantic search.
         """
-        pre_filtered_ids = self._parse_and_get_filtered_ids(query)
+        # Use the original query for hard filters to catch specific keywords like "5+ years"
+        pre_filtered_ids = self._parse_and_get_filtered_ids(original_query)
 
-        was_filtered = pre_filtered_ids != set(self.employee_map.keys())
-        if was_filtered and not pre_filtered_ids:
-            return [], np.array([[]])
+        if not pre_filtered_ids:
+            return []
 
-        query_embedding = self.embedding_model.encode([query])
-        k_for_search = len(self.employees)
-        distances, semantic_ids_list = self.index.search(query_embedding, k=k_for_search)
+        # Use the expanded query for a more nuanced semantic search
+        query_embedding = self.embedding_model.encode([expanded_query])
+        
+        # Search across all candidates to get a semantic ranking
+        distances, semantic_ids_list = self.index.search(query_embedding, k=len(self.employees))
 
+        # Combine results: Rank by semantic similarity, but only include those who pass the hard filters
         final_candidates = []
         seen_ids = set()
-        
-        # Iterate through the full ranked list and pick out all matching candidates
         for eid in semantic_ids_list[0]:
             if eid != -1 and eid in pre_filtered_ids and eid not in seen_ids:
                 final_candidates.append(Employee(**self.employee_map[eid]))
                 seen_ids.add(eid)
                 
-        dummy_scores = np.array([[0.0] * len(final_candidates)])
-        return final_candidates, dummy_scores
+        return final_candidates
 
-    def _call_llm(self, user_prompt: str, system_prompt: str) -> str:
-        try:
-            response = self.llm_client.chat.completions.create(model="llama3-8b-8192", messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], temperature=0.7)
-            return response.choices[0].message.content
-        except Exception as e:
-            st.error(f"LLM API Error: {e}")
-            return "I'm sorry, I encountered an error while generating a response."
-
+    # ✨ UPDATED: More detailed and professional system prompts
     def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
-        system_prompt = """You are an expert HR Talent Acquisition Partner... (prompt unchanged)"""
+        system_prompt = """
+        You are an expert HR Talent Acquisition Partner AI. Your tone is professional, insightful, and concise.
+
+        You will be given a user's query and a list of JSON profiles for suitable candidates retrieved from the database.
+        
+        Your task is to generate a helpful and well-structured response that includes:
+        1.  **Summary**: Briefly acknowledge the user's request and state that you have found some suitable candidates.
+        2.  **Top Recommendations**: Highlight 1-2 top candidates who are the strongest match. Briefly explain *why* they are a good fit, referencing their specific skills or project experience.
+        3.  **Conclusion**: End with a confident and helpful closing statement, perhaps suggesting next steps.
+
+        **Do not just list the employees.** Provide a valuable, synthesized analysis. Do not mention that the data was provided to you in JSON format.
+        """
         context_str = "\n---\n".join([json.dumps(emp.model_dump()) for emp in context_employees])
         user_prompt = f"""User Query: "{query}"\n\nRetrieved Candidate Profiles:\n{context_str}\n\nBased on this, generate your expert recommendation."""
-        return self._call_llm(user_prompt, system_prompt)
+        return self._call_llm(user_prompt, system_prompt, temperature=0.7)
 
     def generate_general_response(self, query: str) -> str:
-        system_prompt = "You are a friendly and helpful conversational AI assistant..."
-        return self._call_llm(query, system_prompt)
+        system_prompt = """
+        You are a friendly and helpful conversational AI assistant for a Talent Finder application.
+        - If the user greets you, greet them back warmly.
+        - If the user asks who you are or what you do, explain that you are an intelligent HR assistant designed to help find talent from an internal employee database.
+        - If the user asks who made you, state that you were created by Vicky Mahato as an advanced AI project.
+        - For any other general chit-chat, be helpful and conversational.
+        - If you cannot find a candidate, state it clearly and politely suggest broadening the search criteria.
+        """
+        return self._call_llm(query, system_prompt, temperature=0.7)
 
 @st.cache_resource
 def load_rag_system():
     try:
-        return RAGSystem(api_key=st.secrets.get("GROQ_API_KEY"))
+        api_key = st.secrets.get("GROQ_API_KEY")
+        if not api_key:
+            st.error("GROQ_API_KEY not found in Streamlit secrets. Please add it to run the application.")
+            return None
+        return RAGSystem(api_key=api_key)
     except Exception as e:
         st.error(f"Initialization failed: {e}")
         return None
 
-# --- 4. UI Helper Functions ---
+# --- 4. UI Helper Functions (Unchanged) ---
 def stream_response(text):
     for word in text.split():
         yield word + " "
@@ -129,20 +210,34 @@ def stream_response(text):
 
 def display_employee_card(card_data: dict, container):
     with container:
-        st.markdown(f"""<div class="employee-card"><h3><span class="icon">👤</span>{card_data['name']}</h3><p><span class="icon">📅</span><b>Experience:</b> {card_data['experience_years']} years</p><p><span class="icon">📌</span><b>Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']}</p><details><summary><b>View Details</b></summary><p><span class="icon">🛠️</span><b>Skills:</b> {', '.join(card_data['skills'])}</p><p><span class="icon">🚀</span><b>Projects:</b></p><ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul></details>{f"<p><span class='icon'>📝</span><b>Notes:</b> {card_data.get('notes')}</p>" if card_data.get('notes') else ""}</div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="employee-card"><h3><span class="icon">👤</span>{card_data['name']}</h3><p><span class="icon">📅</span><b>Experience:</b> {card_data['experience_years']} years</p><p><span class="icon">📌</span><b>Status:</b> {'✅ Available' if card_data['availability'].lower() == 'available' else '⏳ ' + card_data['availability']} </p><details><summary><b>View Details</b></summary><p><span class="icon">🛠️</span><b>Skills:</b> {', '.join(card_data['skills'])}</p><p><span class="icon">🚀</span><b>Projects:</b></p><ul>{''.join(f"<li>{proj}</li>" for proj in card_data['projects'])}</ul></details>{f"<p><span class='icon'>📝</span><b>Notes:</b> {card_data.get('notes')}</p>" if card_data.get('notes') else ""}</div>""", unsafe_allow_html=True)
 
-def show_thinking_animation():
-    thinking_steps = ["🔍 Parsing query...", "⚙️ Applying filters...", "🧠 Analyzing candidates..."]
+def show_thinking_animation(step_text: str):
     placeholder = st.empty()
-    for step in thinking_steps:
-        placeholder.markdown(f"""<div class="loader-container"><div class="robot-icon">🤖</div><div>{step}</div></div>""", unsafe_allow_html=True)
-        time.sleep(0.6)
+    placeholder.markdown(f"""<div class="loader-container"><div class="robot-icon">🤖</div><div>{step_text}</div></div>""", unsafe_allow_html=True)
+    time.sleep(1) # Simulate work
     placeholder.empty()
 
 def handle_prompt_click(prompt_text):
     st.session_state.clicked_prompt = prompt_text
 
+def display_cards_grid(cards):
+    if not cards:
+        return
+    
+    num_cards = len(cards)
+    cols_per_row = 3
+    num_rows = (num_cards + cols_per_row - 1) // cols_per_row
+    
+    for i in range(num_rows):
+        cols = st.columns(cols_per_row)
+        row_cards = cards[i * cols_per_row:(i + 1) * cols_per_row]
+        for j, card in enumerate(row_cards):
+            display_employee_card(card, cols[j])
+
+
 # --- 5. Main Application ---
+# Sidebar (Unchanged)
 with st.sidebar:
     st.markdown("### 🤖 Talent Finder AI")
     st.markdown("This AI chatbot uses a hybrid search system to find the right talent.")
@@ -161,37 +256,32 @@ if rag_system:
     if "clicked_prompt" not in st.session_state:
         st.session_state.clicked_prompt = None
 
+    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message.get("cards"):
-                with st.expander("👥 View Candidate Profiles", expanded=False):
-                    cards = message["cards"]
-                    if len(cards) > 3:
-                        num_rows = (len(cards) + 2) // 3
-                        for i in range(num_rows):
-                            cols = st.columns(3)
-                            row_cards = cards[i*3:(i+1)*3]
-                            for j, card in enumerate(row_cards):
-                                display_employee_card(card, cols[j])
-                    else:
-                        cols = st.columns(len(cards) if cards else 1)
-                        for i, card in enumerate(cards):
-                            display_employee_card(card, cols[i])
+                expander_title = "👥 View All Employee Profiles" if message.get("is_list_all") else "👥 View Recommended Candidate Profiles"
+                with st.expander(expander_title, expanded=False):
+                    display_cards_grid(message["cards"])
 
+    # Show welcome message and example prompts if chat is empty
     if not st.session_state.messages:
         st.markdown("<div style='text-align: center;'><h2>Welcome!</h2><p>Ask me to find talent, or try an example:</p></div>", unsafe_allow_html=True)
         cols = st.columns(4)
         prompts = ["List all employees", "Python devs with 5+ years", "Who knows AWS and Docker?", "Who made you?"]
-        if cols[0].button(prompts[0], use_container_width=True, on_click=handle_prompt_click, args=[prompts[0]]): pass
-        if cols[1].button(prompts[1], use_container_width=True, on_click=handle_prompt_click, args=[prompts[1]]): pass
-        if cols[2].button(prompts[2], use_container_width=True, on_click=handle_prompt_click, args=[prompts[2]]): pass
-        if cols[3].button(prompts[3], use_container_width=True, on_click=handle_prompt_click, args=[prompts[3]]): pass
+        buttons = [
+            cols[0].button(prompts[0], use_container_width=True, on_click=handle_prompt_click, args=[prompts[0]]),
+            cols[1].button(prompts[1], use_container_width=True, on_click=handle_prompt_click, args=[prompts[1]]),
+            cols[2].button(prompts[2], use_container_width=True, on_click=handle_prompt_click, args=[prompts[2]]),
+            cols[3].button(prompts[3], use_container_width=True, on_click=handle_prompt_click, args=[prompts[3]]),
+        ]
 
+    # Chat input
     _, input_col, _ = st.columns([1, 3, 1])
     with input_col:
         prompt = st.chat_input("Find an employee...") or st.session_state.clicked_prompt
-    
+
     if prompt:
         st.session_state.clicked_prompt = None
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -200,61 +290,48 @@ if rag_system:
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            developer_keywords = ["who made you", "your developer", "created you", "invented you", "creator", "vicky"]
-            identity_keywords = ["who are you", "what are you"]
-            greeting_keywords = ["hi", "hello", "hey", "greetings", "good morning", "good afternoon"]
-            list_all_keywords = ["list all", "show all", "list everyone", "show me everyone"]
-            prompt_lower = prompt.lower().strip()
+            # ✨ NEW: Centralized, intelligent response generation
+            show_thinking_animation("🤔 Analyzing your request...")
+            intent, expanded_query = rag_system.analyze_query(prompt)
+
             answer = ""
             cards_to_show = []
+            is_list_all = False
 
-            if prompt_lower in greeting_keywords:
-                answer = "Hello! How can I assist you in finding the right talent today?"
-                st.write_stream(stream_response(answer))
-            elif any(keyword in prompt_lower for keyword in developer_keywords):
-                answer = "I was created by **Vicky Mahato**..."
-                st.write_stream(stream_response(answer))
-            elif any(keyword in prompt_lower for keyword in identity_keywords):
-                answer = "I am an intelligent **HR Assistant Chatbot**..."
-                st.write_stream(stream_response(answer))
-            elif any(keyword in prompt_lower for keyword in list_all_keywords):
-                answer = "Here is a complete list of all employees in our talent pool:"
-                cards_to_show = rag_system.employees
-                st.write_stream(stream_response(answer))
-                if cards_to_show:
-                    with st.expander("👥 View All Employee Profiles", expanded=True):
-                        num_rows = (len(cards_to_show) + 2) // 3
-                        for i in range(num_rows):
-                            cols = st.columns(3)
-                            row_cards = cards_to_show[i*3:(i+1)*3]
-                            for j, card in enumerate(row_cards):
-                                display_employee_card(card, cols[j])
-            else:
-                show_thinking_animation()
-                retrieved_employees, scores = rag_system.search(prompt)
-                
-                if retrieved_employees:
-                    answer = rag_system.generate_hr_response(prompt, retrieved_employees)
-                    cards_to_show = [emp.model_dump() for emp in retrieved_employees]
-                else:
-                    answer = rag_system.generate_general_response(f"I couldn't find anyone who perfectly matches that query: '{prompt}'. Could you try broadening your search?")
-                
-                st.write_stream(stream_response(answer))
-                if cards_to_show:
-                    with st.expander("👥 View Recommended Candidate Profiles", expanded=True):
-                        if len(cards_to_show) > 3:
-                             num_rows = (len(cards_to_show) + 2) // 3
-                             for i in range(num_rows):
-                                cols = st.columns(3)
-                                row_cards = cards_to_show[i*3:(i+1)*3]
-                                for j, card in enumerate(row_cards):
-                                    display_employee_card(card, cols[j])
-                        else:
-                            cols = st.columns(len(cards_to_show) if cards_to_show else 1)
-                            for i, card in enumerate(cards_to_show):
-                                display_employee_card(card, cols[i])
+            match intent:
+                case UserIntent.FIND_PEOPLE:
+                    show_thinking_animation("🧠 Searching for candidates...")
+                    retrieved_employees = rag_system.search(original_query=prompt, expanded_query=expanded_query)
+                    
+                    if retrieved_employees:
+                        answer = rag_system.generate_hr_response(prompt, retrieved_employees)
+                        cards_to_show = [emp.model_dump() for emp in retrieved_employees]
+                    else:
+                        answer = rag_system.generate_general_response(f"I couldn't find anyone who matches the query: '{prompt}'. Could you try broadening your search?")
+                    
+                case UserIntent.LIST_ALL:
+                    answer = "Here is a complete list of all employees in our talent pool:"
+                    cards_to_show = rag_system.employees
+                    is_list_all = True
+
+                case UserIntent.CHITCHAT:
+                    answer = rag_system.generate_general_response(prompt)
+
+            # Stream the text response and display cards
+            st.write_stream(stream_response(answer))
+            if cards_to_show:
+                expander_title = "👥 View All Employee Profiles" if is_list_all else "👥 View Recommended Candidate Profiles"
+                with st.expander(expander_title, expanded=True):
+                   display_cards_grid(cards_to_show)
             
-            st.session_state.messages.append({"role": "assistant", "content": answer, "cards": cards_to_show})
+            # Save the complete message to history
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": answer, 
+                "cards": cards_to_show,
+                "is_list_all": is_list_all
+            })
             st.rerun()
+
 else:
     st.warning("Application could not start. Please verify your API key in Streamlit secrets.")
