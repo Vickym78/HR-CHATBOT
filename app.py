@@ -11,7 +11,7 @@ import numpy as np
 import faiss
 import streamlit as st
 from openai import OpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
 # --- 1. Page Configuration & UI Styling ---
@@ -33,7 +33,6 @@ class Employee(BaseModel):
     availability: str
     notes: Optional[str] = None
 
-# ✨ NEW: Enum to represent the user's intent
 class UserIntent(Enum):
     FIND_PEOPLE = auto()
     LIST_ALL = auto()
@@ -78,7 +77,6 @@ class RAGSystem:
             st.error(f"LLM API Error: {e}")
             return '{"error": "Failed to get a response from the AI."}' if is_json else "I'm sorry, I encountered an error while generating a response."
 
-    # ✨ NEW: Intelligent query analysis using an LLM
     def analyze_query(self, query: str) -> Tuple[UserIntent, str]:
         """
         Classifies the user's intent and expands the query if it's for finding people.
@@ -112,7 +110,6 @@ class RAGSystem:
             }
             return intent_map.get(intent_str, UserIntent.CHITCHAT), expanded_query
         except (json.JSONDecodeError, KeyError):
-            # If LLM fails to produce valid JSON, default to a safe option
             return UserIntent.FIND_PEOPLE, query
 
     def _parse_and_get_filtered_ids(self, query: str) -> Set[int]:
@@ -120,13 +117,11 @@ class RAGSystem:
         query_lower = query.lower()
         candidate_ids = set(self.employee_map.keys())
         
-        # Filter by experience
         exp_match = re.search(r'(\d+)\+?\s*years', query_lower)
         if exp_match:
             min_exp = int(exp_match.group(1))
             candidate_ids.intersection_update({emp['id'] for emp in self.employees if emp['experience_years'] >= min_exp})
             
-        # Filter by skills
         required_skills = {skill for skill in self.all_skills if skill in query_lower}
         if required_skills:
             candidate_ids.intersection_update({
@@ -139,19 +134,15 @@ class RAGSystem:
         """
         Performs a dynamic hybrid search using both metadata filtering and semantic search.
         """
-        # Use the original query for hard filters to catch specific keywords like "5+ years"
         pre_filtered_ids = self._parse_and_get_filtered_ids(original_query)
 
         if not pre_filtered_ids:
             return []
 
-        # Use the expanded query for a more nuanced semantic search
         query_embedding = self.embedding_model.encode([expanded_query])
         
-        # Search across all candidates to get a semantic ranking
         distances, semantic_ids_list = self.index.search(query_embedding, k=len(self.employees))
 
-        # Combine results: Rank by semantic similarity, but only include those who pass the hard filters
         final_candidates = []
         seen_ids = set()
         for eid in semantic_ids_list[0]:
@@ -161,7 +152,6 @@ class RAGSystem:
                 
         return final_candidates
 
-    # ✨ UPDATED: More detailed and professional system prompts
     def generate_hr_response(self, query: str, context_employees: List[Employee]) -> str:
         system_prompt = """
         You are an expert HR Talent Acquisition Partner AI. Your tone is professional, insightful, and concise.
@@ -202,7 +192,7 @@ def load_rag_system():
         st.error(f"Initialization failed: {e}")
         return None
 
-# --- 4. UI Helper Functions (Unchanged) ---
+# --- 4. UI Helper Functions ---
 def stream_response(text):
     for word in text.split():
         yield word + " "
@@ -215,7 +205,7 @@ def display_employee_card(card_data: dict, container):
 def show_thinking_animation(step_text: str):
     placeholder = st.empty()
     placeholder.markdown(f"""<div class="loader-container"><div class="robot-icon">🤖</div><div>{step_text}</div></div>""", unsafe_allow_html=True)
-    time.sleep(1) # Simulate work
+    time.sleep(1)
     placeholder.empty()
 
 def handle_prompt_click(prompt_text):
@@ -237,7 +227,6 @@ def display_cards_grid(cards):
 
 
 # --- 5. Main Application ---
-# Sidebar (Unchanged)
 with st.sidebar:
     st.markdown("### 🤖 Talent Finder AI")
     st.markdown("This AI chatbot uses a hybrid search system to find the right talent.")
@@ -256,7 +245,6 @@ if rag_system:
     if "clicked_prompt" not in st.session_state:
         st.session_state.clicked_prompt = None
 
-    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -265,7 +253,6 @@ if rag_system:
                 with st.expander(expander_title, expanded=False):
                     display_cards_grid(message["cards"])
 
-    # Show welcome message and example prompts if chat is empty
     if not st.session_state.messages:
         st.markdown("<div style='text-align: center;'><h2>Welcome!</h2><p>Ask me to find talent, or try an example:</p></div>", unsafe_allow_html=True)
         cols = st.columns(4)
@@ -277,20 +264,21 @@ if rag_system:
             cols[3].button(prompts[3], use_container_width=True, on_click=handle_prompt_click, args=[prompts[3]]),
         ]
 
-    # Chat input
     _, input_col, _ = st.columns([1, 3, 1])
     with input_col:
         prompt = st.chat_input("Find an employee...") or st.session_state.clicked_prompt
 
+    # ✨ FIXED AND STABLE CHAT LOGIC
     if prompt:
         st.session_state.clicked_prompt = None
-        st.session_state.messages.append({"role": "user", "content": prompt})
         
+        # Display user message and add to history
+        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Generate and display assistant response
         with st.chat_message("assistant"):
-            # ✨ NEW: Centralized, intelligent response generation
             show_thinking_animation("🤔 Analyzing your request...")
             intent, expanded_query = rag_system.analyze_query(prompt)
 
@@ -302,13 +290,12 @@ if rag_system:
                 case UserIntent.FIND_PEOPLE:
                     show_thinking_animation("🧠 Searching for candidates...")
                     retrieved_employees = rag_system.search(original_query=prompt, expanded_query=expanded_query)
-                    
                     if retrieved_employees:
                         answer = rag_system.generate_hr_response(prompt, retrieved_employees)
                         cards_to_show = [emp.model_dump() for emp in retrieved_employees]
                     else:
-                        answer = rag_system.generate_general_response(f"I couldn't find anyone who matches the query: '{prompt}'. Could you try broadening your search?")
-                    
+                        answer = rag_system.generate_general_response(f"I couldn't find anyone who matches the query: '{prompt}'.")
+                
                 case UserIntent.LIST_ALL:
                     answer = "Here is a complete list of all employees in our talent pool:"
                     cards_to_show = rag_system.employees
@@ -317,21 +304,22 @@ if rag_system:
                 case UserIntent.CHITCHAT:
                     answer = rag_system.generate_general_response(prompt)
 
-            # Stream the text response and display cards
+            # Stream the response to the UI
             st.write_stream(stream_response(answer))
+            
+            # Display cards if any were found
             if cards_to_show:
                 expander_title = "👥 View All Employee Profiles" if is_list_all else "👥 View Recommended Candidate Profiles"
                 with st.expander(expander_title, expanded=True):
-                   display_cards_grid(cards_to_show)
-            
-            # Save the complete message to history
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": answer, 
-                "cards": cards_to_show,
-                "is_list_all": is_list_all
-            })
-            st.rerun()
+                    display_cards_grid(cards_to_show)
+
+        # Add the full assistant response to history after it has been displayed
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+            "cards": cards_to_show,
+            "is_list_all": is_list_all
+        })
 
 else:
     st.warning("Application could not start. Please verify your API key in Streamlit secrets.")
