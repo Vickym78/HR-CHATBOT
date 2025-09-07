@@ -1,6 +1,5 @@
 # app.py
 
-import os
 import json
 import re
 import time
@@ -38,7 +37,10 @@ EMPLOYEE_DATA = {
         {"id": 2, "name": "Dr. Sarah Chen", "skills": ["Python", "Machine Learning", "TensorFlow", "PyTorch"],
          "experience_years": 6, "projects": ["Medical Diagnosis Platform", "Genomic Data Analysis Pipeline"],
          "availability": "available", "notes": "Published 3 papers on healthcare AI."},
-        # ... (rest of employees)
+        {"id": 3, "name": "Michael Rodriguez", "skills": ["Python", "Machine Learning", "scikit-learn"],
+         "experience_years": 4, "projects": ["Patient Risk Prediction System", "EHR Anonymization Tool"],
+         "availability": "on project until 2025-10-15"},
+        # ... add the rest of employees here
     ]
 }
 
@@ -113,16 +115,31 @@ class RAGSystem:
         ctx = "\n".join([json.dumps(e.model_dump()) for e in context])
         sys_prompt = "You are an expert HR assistant helping recruiters shortlist talent."
         user_prompt = f"Query: {query}\n\nCandidate Profiles:\n{ctx}\n\nGive a professional HR recommendation."
+
         try:
-            resp = self.llm_client.chat.completions.create(
-                model="llama3-8b-8192",
-                messages=[{"role": "system", "content": sys_prompt},
-                          {"role": "user", "content": user_prompt}],
+            response = self.llm_client.chat.completions.create(
+                model="llama-3.1-8b-instant",  # ✅ updated model
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 temperature=0.6
             )
-            return resp.choices[0].message["content"]
+            return response.choices[0].message["content"]
         except Exception as e:
-            return f"(LLM error: {e})"
+            # Automatic fallback to 70B if instant fails
+            try:
+                response = self.llm_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.6
+                )
+                return response.choices[0].message["content"]
+            except Exception as e2:
+                return f"(LLM error: {e2})"
 
 @st.cache_resource
 def load_rag_system():
