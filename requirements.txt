@@ -1,8 +1,6 @@
 streamlit
-python-dotenv
-sentence-transformers
-faiss-cpu
 openai
-groq
 numpy
 pydantic
+sentence-transformers
+faiss-cpu
