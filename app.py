@@ -48,8 +48,8 @@ EMPLOYEE_DATA = {
         {"id": 4, "name": "David Smith", "skills": ["Java", "Spring Boot", "Kubernetes", "Docker", "GCP"], "experience_years": 8, "projects": ["Microservices Architecture for Fintech", "Cloud Deployment Automation"], "availability": "available"},
         {"id": 5, "name": "Emily White", "skills": ["JavaScript", "Vue.js", "Firebase", "UX/UI Design"], "experience_years": 3, "projects": ["Real-time Collaborative Whiteboard", "Social Media Analytics App"], "availability": "available"},
         {"id": 6, "name": "Chris Green", "skills": ["Go", "Python", "Terraform", "Ansible", "CI/CD"], "experience_years": 7, "projects": ["Infrastructure as Code for Banking", "Automated Security Auditing"], "availability": "on project until 2026-01-20"},
-        {"id": 7, "name": "Priya Patel", "skills": ["Python", "Django", "PostgreSQL", "React"], "experience_years": 5, "projects": ["Supply Chain Management Portal", "Customer Relationship Manager (CRM)"], "availability": "available"}
-         {"id":8, "name": "Vikash Choudharay", "skills": ["C++", "Docker", "PostgreSQL", "React"], "experience_years": 10, "projects": ["Supply Chain Management Portal", "Customer Relationship Manager (CRM)"], "availability": "available"}
+        {"id": 7, "name": "Priya Patel", "skills": ["Python", "Django", "PostgreSQL", "React"], "experience_years": 5, "projects": ["Supply Chain Management Portal", "Customer Relationship Manager (CRM)"], "availability": "available"},
+        {"id":8, "name": "Vikash Choudharay", "skills": ["C++", "Docker", "PostgreSQL", "React"], "experience_years": 10, "projects": ["Supply Chain Management Portal", "Customer Relationship Manager (CRM)"], "availability": "available"}
     ]
 }
 
@@ -211,7 +211,6 @@ def main():
         st.session_state.messages.append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
-
         with st.chat_message("assistant"):
             # --- Intent Detection Step ---
             if rag_system.is_search_query(user_query):
