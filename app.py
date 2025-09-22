@@ -3,7 +3,6 @@
 import json
 import re
 from typing import List, Optional, Set
-
 import numpy as np
 import faiss
 import streamlit as st
@@ -50,6 +49,7 @@ EMPLOYEE_DATA = {
         {"id": 5, "name": "Emily White", "skills": ["JavaScript", "Vue.js", "Firebase", "UX/UI Design"], "experience_years": 3, "projects": ["Real-time Collaborative Whiteboard", "Social Media Analytics App"], "availability": "available"},
         {"id": 6, "name": "Chris Green", "skills": ["Go", "Python", "Terraform", "Ansible", "CI/CD"], "experience_years": 7, "projects": ["Infrastructure as Code for Banking", "Automated Security Auditing"], "availability": "on project until 2026-01-20"},
         {"id": 7, "name": "Priya Patel", "skills": ["Python", "Django", "PostgreSQL", "React"], "experience_years": 5, "projects": ["Supply Chain Management Portal", "Customer Relationship Manager (CRM)"], "availability": "available"}
+         {"id":8, "name": "Vikash Choudharay", "skills": ["C++", "Docker", "PostgreSQL", "React"], "experience_years": 10, "projects": ["Supply Chain Management Portal", "Customer Relationship Manager (CRM)"], "availability": "available"}
     ]
 }
 
